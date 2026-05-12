@@ -36,6 +36,8 @@ from datetime import datetime, date
 from pathlib import Path
 from typing import Any, Callable
 
+from app.services import calc_metrics as service_calc_metrics, calc_yoy as service_calc_yoy, grade_summary as service_grade_summary, progress_rank as service_progress_rank, rank_forecast_yoy as service_rank_forecast_yoy, rank_next_yoy as service_rank_next_yoy, rank_symbol as service_rank_symbol
+
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -777,7 +779,7 @@ def calc_metrics(periods: FinancialPeriods, price: float | None) -> dict[str, fl
     fcf = None if ocf is None or icf is None else ocf + icf
 
     op_margin = None if sales in (None, 0) or op is None else op / sales * 100
-    yoy_sales = calc_yoy(sales, prev_sales)
+    yoy_sales = service_calc_yoy(sales, prev_sales)
     op_yoy = None
     if op is not None and prev_op not in (None, 0) and prev_op is not None and prev_op > 0 and op >= 0:
         op_yoy = (op / prev_op - 1) * 100
@@ -805,12 +807,12 @@ def calc_metrics(periods: FinancialPeriods, price: float | None) -> dict[str, fl
     next_op_2q = get_value(forecast_source, ["NxFOP2Q"], ["NextFiscalYearForecastOperatingProfit2Q"])
     next_eps_2q = get_value(forecast_source, ["NxFEPS2Q"], ["NextFiscalYearForecastEPS2Q"])
 
-    forecast_sales_yoy = calc_yoy(forecast_sales, sales)
-    forecast_op_yoy = calc_yoy(forecast_op, op)
-    forecast_eps_yoy = calc_yoy(forecast_eps, eps)
-    next_sales_yoy = calc_yoy(next_sales, forecast_sales)
-    next_op_yoy = calc_yoy(next_op, forecast_op)
-    next_eps_yoy = calc_yoy(next_eps, forecast_eps)
+    forecast_sales_yoy = service_calc_yoy(forecast_sales, sales)
+    forecast_op_yoy = service_calc_yoy(forecast_op, op)
+    forecast_eps_yoy = service_calc_yoy(forecast_eps, eps)
+    next_sales_yoy = service_calc_yoy(next_sales, forecast_sales)
+    next_op_yoy = service_calc_yoy(next_op, forecast_op)
+    next_eps_yoy = service_calc_yoy(next_eps, forecast_eps)
 
     progress_label, progress_base = progress_base_from_period_type(latest_quarter_rec.period_type if latest_quarter_rec else None)
     actual_progress_sales = get_value(latest_quarter, ["Sales"], ["NetSales", "Revenue", "TotalRevenue"])
@@ -1099,20 +1101,20 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
             *period_lines,
         ])
 
-    metrics = calc_metrics(periods, price)
-    actual_score, forecast_score, total_score, total_max, grade = grade_summary(metrics)
+    metrics = service_calc_metrics(periods, price)
+    actual_score, forecast_score, total_score, total_max, grade = service_grade_summary(metrics)
 
-    sales_rank = rank_symbol(metrics.get("yoy_sales"), "growth")
-    op_rank = rank_symbol(metrics.get("op_yoy"), "op_growth")
-    profitability_rank = rank_symbol(metrics.get("op_margin"), "op_margin")
-    roe_rank = rank_symbol(metrics.get("roe"), "roe")
-    cf_rank = rank_symbol(metrics.get("ocf_np_ratio"), "cf")
-    financial_rank = rank_symbol(metrics.get("eq_ratio"), "equity_ratio")
-    valuation_rank = rank_symbol(metrics.get("peg"), "peg")
+    sales_rank = service_rank_symbol(metrics.get("yoy_sales"), "growth")
+    op_rank = service_rank_symbol(metrics.get("op_yoy"), "op_growth")
+    profitability_rank = service_rank_symbol(metrics.get("op_margin"), "op_margin")
+    roe_rank = service_rank_symbol(metrics.get("roe"), "roe")
+    cf_rank = service_rank_symbol(metrics.get("ocf_np_ratio"), "cf")
+    financial_rank = service_rank_symbol(metrics.get("eq_ratio"), "equity_ratio")
+    valuation_rank = service_rank_symbol(metrics.get("peg"), "peg")
 
-    forecast_rank = rank_forecast_yoy(metrics.get("forecast_op_yoy") if metrics.get("forecast_op_yoy") is not None else metrics.get("forecast_sales_yoy"))
-    progress_rank_value = progress_rank(metrics.get("op_progress"), metrics.get("progress_base"))
-    next_rank_value = rank_next_yoy(metrics.get("next_op_yoy") if metrics.get("next_op_yoy") is not None else metrics.get("next_sales_yoy"))
+    forecast_rank = service_rank_forecast_yoy(metrics.get("forecast_op_yoy") if metrics.get("forecast_op_yoy") is not None else metrics.get("forecast_sales_yoy"))
+    progress_rank_value = service_progress_rank(metrics.get("op_progress"), metrics.get("progress_base"))
+    next_rank_value = service_rank_next_yoy(metrics.get("next_op_yoy") if metrics.get("next_op_yoy") is not None else metrics.get("next_sales_yoy"))
 
     lines: list[str] = []
     lines.extend([
@@ -1159,13 +1161,13 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
         "■会社予想・進捗",
         "",
         "【今期会社予想】",
-        f"売上予想：{fmt_money(metrics.get('forecast_sales'))}（YoY {fmt_pct(metrics.get('forecast_sales_yoy'))}） → {rank_forecast_yoy(metrics.get('forecast_sales_yoy'))}",
-        f"営業利益予想：{fmt_money(metrics.get('forecast_op'))}（YoY {fmt_pct(metrics.get('forecast_op_yoy'))}） → {rank_forecast_yoy(metrics.get('forecast_op_yoy'))}",
+        f"売上予想：{fmt_money(metrics.get('forecast_sales'))}（YoY {fmt_pct(metrics.get('forecast_sales_yoy'))}） → {service_rank_forecast_yoy(metrics.get('forecast_sales_yoy'))}",
+        f"営業利益予想：{fmt_money(metrics.get('forecast_op'))}（YoY {fmt_pct(metrics.get('forecast_op_yoy'))}） → {service_rank_forecast_yoy(metrics.get('forecast_op_yoy'))}",
         f"EPS予想：{fmt_num(metrics.get('forecast_eps'))}円（YoY {fmt_pct(metrics.get('forecast_eps_yoy'))}）",
         "",
         "【来期予想】",
-        f"売上予想：{fmt_money(metrics.get('next_sales'))}（今期比 {fmt_pct(metrics.get('next_sales_yoy'))}） → {rank_next_yoy(metrics.get('next_sales_yoy'))}",
-        f"営業利益予想：{fmt_money(metrics.get('next_op'))}（今期比 {fmt_pct(metrics.get('next_op_yoy'))}） → {rank_next_yoy(metrics.get('next_op_yoy'))}",
+        f"売上予想：{fmt_money(metrics.get('next_sales'))}（今期比 {fmt_pct(metrics.get('next_sales_yoy'))}） → {service_rank_next_yoy(metrics.get('next_sales_yoy'))}",
+        f"営業利益予想：{fmt_money(metrics.get('next_op'))}（今期比 {fmt_pct(metrics.get('next_op_yoy'))}） → {service_rank_next_yoy(metrics.get('next_op_yoy'))}",
         f"EPS予想：{fmt_num(metrics.get('next_eps'))}円（今期比 {fmt_pct(metrics.get('next_eps_yoy'))}）",
         "",
         "■キャッシュフロー",
@@ -1269,7 +1271,7 @@ class FundamentalApp:
         self.watchlist_path: Path | None = None
         self.watchlist: list[tuple[str, str]] = []
         self.display_to_code: dict[str, tuple[str, str]] = {}
-        self.output_cache: dict[tuple[str, bool], str] = {}
+        self.output_cache: dict[str, str] = {}
         self.file_cache = FileCache()
         self.is_fetching = False
 
@@ -1352,20 +1354,25 @@ class FundamentalApp:
         self.watchlist = watchlist
         self.output_cache.clear()
         self.path_var.set(str(self.watchlist_path))
-        values = []
+        self._populate_stock_choices()
+
+    def _populate_stock_choices(self) -> None:
+        values: list[str] = []
         self.display_to_code.clear()
         for name, code in self.watchlist:
             label = f"{name} ({code})"
             values.append(label)
             self.display_to_code[label] = (name, code)
+
         self.stock_combo["values"] = values
-        if values:
-            self.stock_var.set(values[0])
-            self.status_var.set(f"{len(values)}銘柄を読み込みました。銘柄を選んで取得してください。")
-        else:
+        if not values:
             self.stock_var.set("")
             self.text.delete("1.0", tk.END)
             self.status_var.set("銘柄が見つかりませんでした。")
+            return
+
+        self.stock_var.set(values[0])
+        self.status_var.set(f"{len(values)}銘柄を読み込みました。銘柄を選んで取得してください。")
 
     def on_stock_selected(self, _event=None):
         self.status_var.set("銘柄を選択しました。取得ボタンを押してください。")
@@ -1375,6 +1382,20 @@ class FundamentalApp:
         if not label:
             return None
         return self.display_to_code.get(label)
+
+    def _require_selected_stock(self) -> tuple[str, str] | None:
+        selected = self.selected_stock()
+        if selected is not None:
+            return selected
+        self.status_var.set("先に監視銘柄ファイルと銘柄を選んでください。")
+        return None
+
+    def _require_api_key(self) -> str | None:
+        api_key = self.api_key_var.get().strip()
+        if api_key:
+            return api_key
+        messagebox.showerror("APIキー未入力", "J-Quants APIキーを入力してください。")
+        return None
 
     def _render_output(self, output: str, status: str):
         self.text.delete("1.0", tk.END)
@@ -1387,8 +1408,10 @@ class FundamentalApp:
 
     def _fetch_worker(self, name: str, code4: str, api_key: str):
         try:
-            analyzer = FundamentalAnalyzer(api_key=api_key, file_cache=self.file_cache)
-            output = analyzer.analyze_one(name, code4)
+            from app.services import FundamentalAnalysisService
+
+            service = FundamentalAnalysisService(api_key=api_key, file_cache=self.file_cache)
+            output = service.build_analysis_output(name, code4, build_output_fn=build_output)
             self.output_cache[code4] = output
             self.master.after(0, lambda: self._render_output(output, f"生成完了: {name} ({code4}) / 財務=J-Quants / 株価=yFinance"))
         except Exception as exc:
@@ -1398,27 +1421,22 @@ class FundamentalApp:
         if self.is_fetching:
             return
 
-        selected = self.selected_stock()
+        selected = self._require_selected_stock()
         if selected is None:
-            self.status_var.set("先に監視銘柄ファイルと銘柄を選んでください。")
             return
-        api_key = self.api_key_var.get().strip()
-        if not api_key:
-            messagebox.showerror("APIキー未入力", "J-Quants APIキーを入力してください。")
+
+        api_key = self._require_api_key()
+        if api_key is None:
             return
 
         name, code4 = selected
-        cache_key = code4
-        if cache_key in self.output_cache:
-            self._render_output(self.output_cache[cache_key], f"キャッシュ表示: {name} ({code4})")
+        cached_output = self.output_cache.get(code4)
+        if cached_output is not None:
+            self._render_output(cached_output, f"キャッシュ表示: {name} ({code4})")
             return
 
         self.set_busy(True, f"取得中: {name} ({code4}) / 財務=J-Quants / 株価=yFinance")
-        thread = threading.Thread(
-            target=self._fetch_worker,
-            args=(name, code4, api_key),
-            daemon=True,
-        )
+        thread = threading.Thread(target=self._fetch_worker, args=(name, code4, api_key), daemon=True)
         thread.start()
 
     def copy_text(self):

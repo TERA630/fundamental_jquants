@@ -234,4 +234,100 @@ def grade_summary(metrics: dict[str, Any]) -> tuple[int, int, int, int, str]:
     return actual_score, forecast_score, total_score, total_max, label
 
 
-__all__ = ["FundamentalAnalysisService", "calc_yoy", "progress_rank", "rank_forecast_yoy", "rank_next_yoy", "rank_symbol", "grade_summary"]
+
+
+def calc_metrics(periods: Any, price: float | None) -> dict[str, float | str | None]:
+    """年度×期間種別へ正規化済みデータから、実績・予想・進捗指標を計算する。"""
+    from fundamental_jquants_v7 import (
+        format_period_record,
+        get_value,
+        progress_base_from_period_type,
+        row_from_record,
+    )
+
+    latest_fy_rec = periods.latest_fy
+    prev_fy_rec = periods.prev_fy
+    latest_quarter_rec = periods.latest_quarter
+
+    latest_fy = row_from_record(latest_fy_rec)
+    prev_fy = row_from_record(prev_fy_rec)
+    latest_quarter = row_from_record(latest_quarter_rec)
+
+    if latest_fy is None:
+        return {}
+
+    sales = get_value(latest_fy, ["Sales"], ["NetSales", "Revenue", "TotalRevenue"])
+    prev_sales = get_value(prev_fy, ["Sales"], ["NetSales", "Revenue", "TotalRevenue"])
+
+    op = get_value(latest_fy, ["OP", "Op"], ["OperatingProfit", "OperatingIncome"])
+    prev_op = get_value(prev_fy, ["OP", "Op"], ["OperatingProfit", "OperatingIncome"])
+    ordinary = get_value(latest_fy, ["OrdP", "OdP", "OrdinaryProfit"], ["OrdinaryIncome"])
+    np = get_value(latest_fy, ["NP"], ["Profit", "NetIncome", "ProfitAttributableToOwnersOfParent"])
+    prev_np = get_value(prev_fy, ["NP"], ["Profit", "NetIncome", "ProfitAttributableToOwnersOfParent"])
+
+    eps = get_value(latest_fy, ["EPS"], ["EarningsPerShare"])
+    prev_eps = get_value(prev_fy, ["EPS"], ["EarningsPerShare"])
+    bps = get_value(latest_fy, ["BPS"], ["BookValuePerShare"])
+    eq_ratio = get_value(latest_fy, ["EqAR"], ["EquityToAssetRatio", "CapitalAdequacyRatio"])
+    if eq_ratio is not None and eq_ratio <= 1.0:
+        eq_ratio *= 100
+    div_ann = get_value(latest_fy, ["DivAnn"], ["AnnualDividendPerShare", "DividendPerShareAnnual"])
+    payout = get_value(latest_fy, ["PayoutRatioAnn"], ["PayoutRatio"])
+    if payout is not None and payout <= 1.0:
+        payout *= 100
+
+    ocf = get_value(latest_fy, ["OCF", "CFO", "NCFO"], ["NetCashProvidedByUsedInOperatingActivities", "OperatingCashFlow"])
+    icf = get_value(latest_fy, ["GFI", "CFI", "ICF"], ["NetCashProvidedByUsedInInvestmentActivities", "InvestingCashFlow"])
+    fcf = None if ocf is None or icf is None else ocf + icf
+
+    op_margin = None if sales in (None, 0) or op is None else op / sales * 100
+    yoy_sales = calc_yoy(sales, prev_sales)
+    op_yoy = None
+    if op is not None and prev_op not in (None, 0) and prev_op is not None and prev_op > 0 and op >= 0:
+        op_yoy = (op / prev_op - 1) * 100
+    roe = eps / bps * 100 if bps not in (None, 0) and eps is not None else None
+    ocf_np_ratio = None if ocf is None or np in (None, 0) else ocf / np
+    per = None if price in (None, 0) or eps in (None, 0) else price / eps
+    pbr = None if price in (None, 0) or bps in (None, 0) else price / bps
+    div_yield = None if price in (None, 0) or div_ann is None else div_ann / price * 100
+    growth_for_peg = yoy_sales
+    peg = None if per is None or growth_for_peg in (None, 0) or growth_for_peg is None or growth_for_peg <= 0 else per / growth_for_peg
+
+    forecast_source = latest_quarter or latest_fy
+    forecast_sales = get_value(forecast_source, ["FSales"], ["ForecastSales"])
+    forecast_op = get_value(forecast_source, ["FOP"], ["ForecastOperatingProfit"])
+    forecast_eps = get_value(forecast_source, ["FEPS"], ["ForecastEarningsPerShare"])
+    next_sales = get_value(forecast_source, ["NxFSales"], ["NextFiscalYearForecastSales"])
+    next_op = get_value(forecast_source, ["NxFOP"], ["NextFiscalYearForecastOperatingProfit"])
+    next_eps = get_value(forecast_source, ["NxFEPS"], ["NextFiscalYearForecastEarningsPerShare"])
+
+    forecast_sales_yoy = calc_yoy(forecast_sales, sales)
+    forecast_op_yoy = calc_yoy(forecast_op, op)
+    forecast_eps_yoy = calc_yoy(forecast_eps, eps)
+    next_sales_yoy = calc_yoy(next_sales, forecast_sales)
+    next_op_yoy = calc_yoy(next_op, forecast_op)
+    next_eps_yoy = calc_yoy(next_eps, forecast_eps)
+
+    progress_label, progress_base = progress_base_from_period_type(latest_quarter_rec.period_type if latest_quarter_rec else None)
+    actual_progress_sales = get_value(latest_quarter, ["Sales"], ["NetSales", "Revenue", "TotalRevenue"])
+    actual_progress_op = get_value(latest_quarter, ["OP", "Op"], ["OperatingProfit", "OperatingIncome"])
+    sales_progress = None if actual_progress_sales is None or forecast_sales in (None, 0) or forecast_sales <= 0 else actual_progress_sales / forecast_sales * 100
+    op_progress = None if actual_progress_op is None or forecast_op in (None, 0) or forecast_op <= 0 or actual_progress_op < 0 else actual_progress_op / forecast_op * 100
+
+    return {
+        "sales": sales, "prev_sales": prev_sales, "op": op, "prev_op": prev_op, "ordinary": ordinary,
+        "np": np, "prev_np": prev_np, "eps": eps, "prev_eps": prev_eps, "bps": bps, "eq_ratio": eq_ratio,
+        "div_ann": div_ann, "payout": payout, "ocf": ocf, "icf": icf, "fcf": fcf, "op_margin": op_margin,
+        "yoy_sales": yoy_sales, "op_yoy": op_yoy, "roe": roe, "ocf_np_ratio": ocf_np_ratio, "per": per,
+        "pbr": pbr, "div_yield": div_yield, "peg": peg, "forecast_sales": forecast_sales, "forecast_op": forecast_op,
+        "forecast_eps": forecast_eps, "forecast_sales_yoy": forecast_sales_yoy, "forecast_op_yoy": forecast_op_yoy,
+        "forecast_eps_yoy": forecast_eps_yoy, "next_sales": next_sales, "next_op": next_op, "next_eps": next_eps,
+        "next_sales_yoy": next_sales_yoy, "next_op_yoy": next_op_yoy, "next_eps_yoy": next_eps_yoy,
+        "sales_progress": sales_progress, "op_progress": op_progress, "progress_label": progress_label,
+        "progress_base": progress_base, "latest_fy_label": format_period_record(latest_fy_rec),
+        "prev_fy_label": format_period_record(prev_fy_rec), "latest_quarter_label": format_period_record(latest_quarter_rec),
+        "forecast_source_label": format_period_record(latest_quarter_rec or latest_fy_rec),
+    }
+
+
+__all__ = ["FundamentalAnalysisService", "calc_yoy", "calc_metrics", "progress_rank", "rank_forecast_yoy", "rank_next_yoy", "rank_symbol", "grade_summary"]

@@ -36,7 +36,7 @@ from datetime import datetime, date
 from pathlib import Path
 from typing import Any, Callable
 
-from app.services import calc_yoy as service_calc_yoy, grade_summary as service_grade_summary, progress_rank as service_progress_rank, rank_forecast_yoy as service_rank_forecast_yoy, rank_next_yoy as service_rank_next_yoy, rank_symbol as service_rank_symbol
+from app.services import calc_metrics as service_calc_metrics, calc_yoy as service_calc_yoy, grade_summary as service_grade_summary, progress_rank as service_progress_rank, rank_forecast_yoy as service_rank_forecast_yoy, rank_next_yoy as service_rank_next_yoy, rank_symbol as service_rank_symbol
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -1101,7 +1101,7 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
             *period_lines,
         ])
 
-    metrics = calc_metrics(periods, price)
+    metrics = service_calc_metrics(periods, price)
     actual_score, forecast_score, total_score, total_max, grade = service_grade_summary(metrics)
 
     sales_rank = service_rank_symbol(metrics.get("yoy_sales"), "growth")

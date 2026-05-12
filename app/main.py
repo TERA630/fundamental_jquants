@@ -2,7 +2,7 @@
 
 import tkinter as tk
 
-from .gui import FundamentalApp
+from app.gui import FundamentalApp
 
 
 def main() -> None:

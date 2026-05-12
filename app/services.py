@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from app.repositories import (
     FileCache,
@@ -53,13 +53,11 @@ class FundamentalAnalysisService:
             "market_cap": snapshot.get("market_cap"),
         }
 
-    def build_analysis_output(self, name: str, code4: str) -> str:
-        from fundamental_jquants_v7 import build_output
-
+    def build_analysis_output(self, name: str, code4: str, build_output_fn: Callable[..., str]) -> str:
         master = self.fetch_master(code4)
         summary_rows = self.fetch_summary_rows(code4)
         price_snapshot = self.fetch_price_snapshot(code4)
-        return build_output(
+        return build_output_fn(
             name=name,
             code4=code4,
             master=master,
@@ -238,12 +236,48 @@ def grade_summary(metrics: dict[str, Any]) -> tuple[int, int, int, int, str]:
 
 def calc_metrics(periods: Any, price: float | None) -> dict[str, float | str | None]:
     """年度×期間種別へ正規化済みデータから、実績・予想・進捗指標を計算する。"""
-    from fundamental_jquants_v7 import (
-        format_period_record,
-        get_value,
-        progress_base_from_period_type,
-        row_from_record,
-    )
+    def row_from_record(record: Any) -> dict[str, Any] | None:
+        return None if record is None else record.row
+
+    def format_period_record(record: Any) -> str:
+        if record is None:
+            return "N/A"
+        period = f"{record.cur_per_st}〜{record.cur_per_en}" if record.cur_per_st or record.cur_per_en else "期間N/A"
+        disclosed = f" / 開示 {record.disclosed_at}" if record.disclosed_at else ""
+        return f"{record.fiscal_year}年度 {record.period_type}（{period}{disclosed}）"
+
+    def progress_base_from_period_type(period_type: str | None) -> tuple[str, float | None]:
+        if period_type == "1Q":
+            return "1Q", 25.0
+        if period_type == "2Q":
+            return "2Q", 50.0
+        if period_type == "3Q":
+            return "3Q", 75.0
+        if period_type == "FY":
+            return "通期", 100.0
+        return "N/A", None
+
+    def safe_float(value: Any) -> float | None:
+        if value is None:
+            return None
+        try:
+            return float(str(value).replace(",", ""))
+        except Exception:
+            return None
+
+    def first_present(data: dict[str, Any], keys: list[str]) -> Any:
+        for key in keys:
+            if key in data and data[key] not in (None, ""):
+                return data[key]
+        return None
+
+    def get_value(row: dict[str, Any] | None, short_keys: list[str], long_keys: list[str] | None = None) -> float | None:
+        if not row:
+            return None
+        keys = list(short_keys)
+        if long_keys:
+            keys += long_keys
+        return safe_float(first_present(row, keys))
 
     latest_fy_rec = periods.latest_fy
     prev_fy_rec = periods.prev_fy

@@ -1411,7 +1411,7 @@ class FundamentalApp:
             from app.services import FundamentalAnalysisService
 
             service = FundamentalAnalysisService(api_key=api_key, file_cache=self.file_cache)
-            output = service.build_analysis_output(name, code4)
+            output = service.build_analysis_output(name, code4, build_output_fn=build_output)
             self.output_cache[code4] = output
             self.master.after(0, lambda: self._render_output(output, f"生成完了: {name} ({code4}) / 財務=J-Quants / 株価=yFinance"))
         except Exception as exc:

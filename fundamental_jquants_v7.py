@@ -1269,7 +1269,7 @@ class FundamentalApp:
         self.watchlist_path: Path | None = None
         self.watchlist: list[tuple[str, str]] = []
         self.display_to_code: dict[str, tuple[str, str]] = {}
-        self.output_cache: dict[tuple[str, bool], str] = {}
+        self.output_cache: dict[str, str] = {}
         self.file_cache = FileCache()
         self.is_fetching = False
 
@@ -1352,20 +1352,25 @@ class FundamentalApp:
         self.watchlist = watchlist
         self.output_cache.clear()
         self.path_var.set(str(self.watchlist_path))
-        values = []
+        self._populate_stock_choices()
+
+    def _populate_stock_choices(self) -> None:
+        values: list[str] = []
         self.display_to_code.clear()
         for name, code in self.watchlist:
             label = f"{name} ({code})"
             values.append(label)
             self.display_to_code[label] = (name, code)
+
         self.stock_combo["values"] = values
-        if values:
-            self.stock_var.set(values[0])
-            self.status_var.set(f"{len(values)}銘柄を読み込みました。銘柄を選んで取得してください。")
-        else:
+        if not values:
             self.stock_var.set("")
             self.text.delete("1.0", tk.END)
             self.status_var.set("銘柄が見つかりませんでした。")
+            return
+
+        self.stock_var.set(values[0])
+        self.status_var.set(f"{len(values)}銘柄を読み込みました。銘柄を選んで取得してください。")
 
     def on_stock_selected(self, _event=None):
         self.status_var.set("銘柄を選択しました。取得ボタンを押してください。")
@@ -1375,6 +1380,20 @@ class FundamentalApp:
         if not label:
             return None
         return self.display_to_code.get(label)
+
+    def _require_selected_stock(self) -> tuple[str, str] | None:
+        selected = self.selected_stock()
+        if selected is not None:
+            return selected
+        self.status_var.set("先に監視銘柄ファイルと銘柄を選んでください。")
+        return None
+
+    def _require_api_key(self) -> str | None:
+        api_key = self.api_key_var.get().strip()
+        if api_key:
+            return api_key
+        messagebox.showerror("APIキー未入力", "J-Quants APIキーを入力してください。")
+        return None
 
     def _render_output(self, output: str, status: str):
         self.text.delete("1.0", tk.END)
@@ -1387,8 +1406,10 @@ class FundamentalApp:
 
     def _fetch_worker(self, name: str, code4: str, api_key: str):
         try:
-            analyzer = FundamentalAnalyzer(api_key=api_key, file_cache=self.file_cache)
-            output = analyzer.analyze_one(name, code4)
+            from app.services import FundamentalAnalysisService
+
+            service = FundamentalAnalysisService(api_key=api_key, file_cache=self.file_cache)
+            output = service.build_analysis_output(name, code4)
             self.output_cache[code4] = output
             self.master.after(0, lambda: self._render_output(output, f"生成完了: {name} ({code4}) / 財務=J-Quants / 株価=yFinance"))
         except Exception as exc:
@@ -1398,27 +1419,22 @@ class FundamentalApp:
         if self.is_fetching:
             return
 
-        selected = self.selected_stock()
+        selected = self._require_selected_stock()
         if selected is None:
-            self.status_var.set("先に監視銘柄ファイルと銘柄を選んでください。")
             return
-        api_key = self.api_key_var.get().strip()
-        if not api_key:
-            messagebox.showerror("APIキー未入力", "J-Quants APIキーを入力してください。")
+
+        api_key = self._require_api_key()
+        if api_key is None:
             return
 
         name, code4 = selected
-        cache_key = code4
-        if cache_key in self.output_cache:
-            self._render_output(self.output_cache[cache_key], f"キャッシュ表示: {name} ({code4})")
+        cached_output = self.output_cache.get(code4)
+        if cached_output is not None:
+            self._render_output(cached_output, f"キャッシュ表示: {name} ({code4})")
             return
 
         self.set_busy(True, f"取得中: {name} ({code4}) / 財務=J-Quants / 株価=yFinance")
-        thread = threading.Thread(
-            target=self._fetch_worker,
-            args=(name, code4, api_key),
-            daemon=True,
-        )
+        thread = threading.Thread(target=self._fetch_worker, args=(name, code4, api_key), daemon=True)
         thread.start()
 
     def copy_text(self):

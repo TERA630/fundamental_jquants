@@ -167,7 +167,8 @@ class FundamentalApp:
             self.output_cache[code4] = output
             self.master.after(0, lambda: self._render_output(output, f"生成完了: {name} ({code4}) / 財務=J-Quants / 株価=yFinance"))
         except Exception as exc:
-            self.master.after(0, lambda: self._handle_fetch_error(str(exc)))
+            error_message = str(exc)
+            self.master.after(0, lambda msg=error_message: self._handle_fetch_error(msg))
 
     def generate_text(self):
         if self.is_fetching:

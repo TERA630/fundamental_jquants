@@ -128,15 +128,39 @@ def market_cap_band(v: float | None) -> str:
         return "N/A"
     oku = v / 100_000_000
     if oku >= 100_000:
-        return "超大型（10兆円以上）"
+        return "超大型"
     if oku >= 10_000:
-        return "大型主役（1兆〜10兆円）"
+        return "主役大型"
     if oku >= 3_000:
-        return "中型主役（3000億〜1兆円）"
+        return "中型主役"
     if oku >= 1_000:
-        return "小〜中型（1000億〜3000億円）"
-    return "小型（1000億円未満）"
+        return "小〜中型"
+    return "小型"
 
+
+
+
+def build_fy_compare_line(
+    label: str,
+    current_value: float | None,
+    previous_value: float | None,
+    current_year: str | None,
+    previous_year: str | None,
+    *,
+    is_percent: bool = False,
+    include_yoy: bool = True,
+    unit_suffix: str = "",
+) -> str:
+    if is_percent:
+        current_text = fmt_plain_pct(current_value)
+        previous_text = fmt_plain_pct(previous_value)
+    else:
+        current_text = f"{fmt_money(current_value)}{unit_suffix}"
+        previous_text = f"{fmt_money(previous_value)}{unit_suffix}"
+    yoy_text = f" YoY {fmt_pct(calc_yoy(current_value, previous_value))}" if include_yoy else ""
+    y_current = current_year or "N/A"
+    y_previous = previous_year or "N/A"
+    return f"{label}：{current_text}（{y_current}年{yoy_text}） ← {previous_text}（{y_previous}年）"
 
 def calc_yoy(current: float | None, previous: float | None) -> float | None:
     if current is None or previous is None or previous == 0:
@@ -454,6 +478,37 @@ class FinancialPeriods:
     prev_fy: PeriodRecord | None
     latest_quarter: PeriodRecord | None
     latest_any: PeriodRecord | None
+
+
+@dataclass(frozen=True)
+class OutputViewModel:
+    """GUI出力向けの表示DTO。ドメイン計算結果を表示責務に合わせて束ねる。"""
+
+    company_name: str
+    code4: str
+    sector33: str
+    market_cap_text: str
+    market_cap_band_label: str
+    latest_year: str | None
+    prev_year: str | None
+
+
+def build_output_view_model(
+    company_name: str,
+    code4: str,
+    sector33: str,
+    market_cap: float | None,
+    periods: FinancialPeriods,
+) -> OutputViewModel:
+    return OutputViewModel(
+        company_name=company_name,
+        code4=code4,
+        sector33=sector33 or "N/A",
+        market_cap_text=fmt_market_cap(market_cap),
+        market_cap_band_label=market_cap_band(market_cap),
+        latest_year=str(getattr(periods.latest_fy, "fiscal_year", "")) if periods.latest_fy else None,
+        prev_year=str(getattr(periods.prev_fy, "fiscal_year", "")) if periods.prev_fy else None,
+    )
 
 
 def _as_text(value: Any) -> str:
@@ -1134,22 +1189,36 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
         "",
     ])
 
-    lines.extend(render_period_index_table(periods))
-    lines.append("")
-    lines.extend(render_fy_compare_table(periods.latest_fy, periods.prev_fy))
-    lines.append("")
     lines.extend(render_quarter_table(periods, metrics))
     lines.append("")
 
+    view_model = build_output_view_model(company_name, code4, sector33, market_cap, periods)
+
     lines.extend([
-        "■主要指標",
-        f"売上高：{fmt_money(metrics.get('sales'))}（YoY {fmt_pct(metrics.get('yoy_sales'))}） → {eval_mark(metrics.get('yoy_sales'), THRESHOLDS['sales_yoy'])}",
-        f"営業利益：{fmt_money(metrics.get('op'))}（YoY {profit_yoy_label(metrics.get('op'), metrics.get('prev_op'), metrics.get('op_yoy'))} / 利益率 {fmt_plain_pct(metrics.get('op_margin'))}） → {eval_mark(metrics.get('op_margin'), THRESHOLDS['op_margin'])}",
-        f"経常利益：{fmt_money(metrics.get('ordinary'))}",
-        f"当期純利益：{fmt_money(metrics.get('np'))}",
+        f"{view_model.company_name} ({view_model.code4})",
+        "■株価・割安性",
+        f"株価　　　　：{fmt_num(price, 0)}円（yFinance取得）",
+        f"PER(PEG)　　：{fmt_num(metrics.get('per'))}倍（{fmt_num(metrics.get('peg'))}倍）",
+        f"PBR　　　 　：{fmt_num(metrics.get('pbr'))}倍",
+        f"EPS/BPS　 　：{fmt_num(metrics.get('eps'))}円 / {fmt_num(metrics.get('bps'))}円",
+        f"配当利回り　：{fmt_plain_pct(metrics.get('div_yield'))}（配当性向 {fmt_plain_pct(metrics.get('payout'))}）",
         "",
-        f"ROE：{fmt_plain_pct(metrics.get('roe'))} → {eval_mark(metrics.get('roe'), THRESHOLDS['roe'])}",
-        f"自己資本比率：{fmt_plain_pct(metrics.get('eq_ratio'))} → {financial_rank}",
+        "■時価総額・業種",
+        f"時価総額　　：{view_model.market_cap_text}　({view_model.market_cap_band_label})",
+        f"業種　　　　：{view_model.sector33}",
+        "",
+        "■主要指標",
+        "",
+        build_fy_compare_line("売上高　　　", metrics.get("sales"), metrics.get("prev_sales"), view_model.latest_year, view_model.prev_year),
+        build_fy_compare_line("営業利益　　", metrics.get("op"), metrics.get("prev_op"), view_model.latest_year, view_model.prev_year),
+        build_fy_compare_line("営業利益率　", metrics.get("op_margin"), metrics.get("prev_op_margin"), view_model.latest_year, view_model.prev_year, value_kind="percent", include_yoy=False),
+        build_fy_compare_line("経常利益　　", metrics.get("ordinary"), metrics.get("prev_ordinary"), view_model.latest_year, view_model.prev_year),
+        build_fy_compare_line("純利益　　　", metrics.get("np"), metrics.get("prev_np"), view_model.latest_year, view_model.prev_year),
+        build_fy_compare_line("EPS　　　 　", metrics.get("eps"), metrics.get("prev_eps"), view_model.latest_year, view_model.prev_year, value_kind="number"),
+        "",
+        f"ROE　　　　 ：{fmt_plain_pct(metrics.get('roe'))}",
+        f"自己資本比率：{fmt_plain_pct(metrics.get('eq_ratio'))}",
+        f"営業CF　　　：{fmt_money(metrics.get('ocf'))}",
         "",
         "■会社予想・進捗",
         "",
@@ -1169,19 +1238,6 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
         f"簡易FCF：{fmt_money(metrics.get('fcf'))}",
         f"営業CF/純利益：{fmt_num(metrics.get('ocf_np_ratio'))}倍 → {eval_mark(metrics.get('ocf_np_ratio'), THRESHOLDS['ocf_np_ratio'])}",
         "",
-        "■株価・割安性",
-        f"株価：{fmt_num(price)}円（yFinance取得）",
-        f"PER：{fmt_num(metrics.get('per'))}倍",
-        f"PBR：{fmt_num(metrics.get('pbr'))}倍",
-        f"PEG：{fmt_num(metrics.get('peg'))}倍 → {valuation_rank}",
-        "",
-        f"EPS：{fmt_num(metrics.get('eps'))}円",
-        f"BPS：{fmt_num(metrics.get('bps'))}円",
-        "",
-        f"年間配当：{fmt_num(metrics.get('div_ann'))}円",
-        f"配当利回り：{fmt_plain_pct(metrics.get('div_yield'))}",
-        f"配当性向：{fmt_plain_pct(metrics.get('payout'))}",
-        "",
         "■評価コメント",
     ])
 
@@ -1196,11 +1252,7 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
     if len(lines) > 0 and lines[-1] == "■評価コメント":
         lines.append("明確な強弱は限定的。テクニカル位置と決算進捗を併せて判断する。")
 
-    lines.extend([
-        "",
-        "■業種補正コメント",
-        sector_comment(f"{sector33} {sector17} {market_segment}"),
-    ])
+    lines.extend(["", *render_period_index_table(periods)])
     return "\n".join(lines)
 
 

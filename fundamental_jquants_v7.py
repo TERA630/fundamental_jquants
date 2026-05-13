@@ -1119,13 +1119,6 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
     lines: list[str] = []
     lines.extend([
         f"【銘柄】{company_name} ({code4})",
-        f"業種：33業種={sector33 or 'N/A'} / 17業種={sector17 or 'N/A'}",
-        f"基準通期：{metrics.get('latest_fy_label')}",
-        f"比較通期：{metrics.get('prev_fy_label')}",
-        f"直近期：{metrics.get('latest_quarter_label')}",
-        f"会社予想ソース：{metrics.get('forecast_source_label')}",
-        f"取得時刻：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        f"時価総額：{fmt_market_cap(market_cap)} / {market_cap_band(market_cap)}",
         "",
         "■総合評価",
         f"判定：{grade}",

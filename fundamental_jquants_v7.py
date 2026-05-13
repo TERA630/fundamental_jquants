@@ -1158,10 +1158,6 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
         "",
     ])
 
-    lines.extend(render_period_index_table(periods))
-    lines.append("")
-    lines.extend(render_fy_compare_table(periods.latest_fy, periods.prev_fy))
-    lines.append("")
     lines.extend(render_quarter_table(periods, metrics))
     lines.append("")
 
@@ -1170,7 +1166,14 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
 
     lines.extend([
         f"{company_name} ({code4})",
-        f"株価　　　　：{fmt_num(price, 0)}円",
+        "■株価・割安性",
+        f"株価　　　　：{fmt_num(price, 0)}円（yFinance取得）",
+        f"PER(PEG)　　：{fmt_num(metrics.get('per'))}倍（{fmt_num(metrics.get('peg'))}倍）",
+        f"PBR　　　 　：{fmt_num(metrics.get('pbr'))}倍",
+        f"EPS/BPS　 　：{fmt_num(metrics.get('eps'))}円 / {fmt_num(metrics.get('bps'))}円",
+        f"配当利回り　：{fmt_plain_pct(metrics.get('div_yield'))}（配当性向 {fmt_plain_pct(metrics.get('payout'))}）",
+        "",
+        "■時価総額・業種",
         f"時価総額　　：{fmt_market_cap(market_cap)}　({market_cap_band(market_cap)})",
         f"業種　　　　：{sector33 or 'N/A'}",
         "",
@@ -1178,18 +1181,14 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
         "",
         build_fy_compare_line("売上高　　　", metrics.get("sales"), metrics.get("prev_sales"), latest_year, prev_year),
         build_fy_compare_line("営業利益　　", metrics.get("op"), metrics.get("prev_op"), latest_year, prev_year),
-        build_fy_compare_line("営業利益率　", metrics.get("op_margin"), metrics.get("prev_op_margin"), latest_year, prev_year, is_percent=True, include_yoy=False),
+        build_fy_compare_line("営業利益率　", metrics.get("op_margin"), metrics.get("prev_op_margin"), latest_year, prev_year, value_kind="percent", include_yoy=False),
         build_fy_compare_line("経常利益　　", metrics.get("ordinary"), metrics.get("prev_ordinary"), latest_year, prev_year),
         build_fy_compare_line("純利益　　　", metrics.get("np"), metrics.get("prev_np"), latest_year, prev_year),
-        build_fy_compare_line("EPS　　　 　", metrics.get("eps"), metrics.get("prev_eps"), latest_year, prev_year, unit_suffix="円"),
+        build_fy_compare_line("EPS　　　 　", metrics.get("eps"), metrics.get("prev_eps"), latest_year, prev_year, value_kind="number"),
         "",
         f"ROE　　　　 ：{fmt_plain_pct(metrics.get('roe'))}",
         f"自己資本比率：{fmt_plain_pct(metrics.get('eq_ratio'))}",
         f"営業CF　　　：{fmt_money(metrics.get('ocf'))}",
-        f"PER　　　　 ：{fmt_num(metrics.get('per'), 1)}倍　(PEG　{fmt_num(metrics.get('peg'))})",
-        f"PBR　　　　 ：{fmt_num(metrics.get('pbr'))}倍",
-        "",
-        f"配当利回り　：{fmt_plain_pct(metrics.get('div_yield'))}",
         "",
         "■会社予想・進捗",
         "",
@@ -1209,19 +1208,6 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
         f"簡易FCF：{fmt_money(metrics.get('fcf'))}",
         f"営業CF/純利益：{fmt_num(metrics.get('ocf_np_ratio'))}倍 → {eval_mark(metrics.get('ocf_np_ratio'), THRESHOLDS['ocf_np_ratio'])}",
         "",
-        "■株価・割安性",
-        f"株価：{fmt_num(price)}円（yFinance取得）",
-        f"PER：{fmt_num(metrics.get('per'))}倍",
-        f"PBR：{fmt_num(metrics.get('pbr'))}倍",
-        f"PEG：{fmt_num(metrics.get('peg'))}倍 → {valuation_rank}",
-        "",
-        f"EPS：{fmt_num(metrics.get('eps'))}円",
-        f"BPS：{fmt_num(metrics.get('bps'))}円",
-        "",
-        f"年間配当：{fmt_num(metrics.get('div_ann'))}円",
-        f"配当利回り：{fmt_plain_pct(metrics.get('div_yield'))}",
-        f"配当性向：{fmt_plain_pct(metrics.get('payout'))}",
-        "",
         "■評価コメント",
     ])
 
@@ -1236,11 +1222,7 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
     if len(lines) > 0 and lines[-1] == "■評価コメント":
         lines.append("明確な強弱は限定的。テクニカル位置と決算進捗を併せて判断する。")
 
-    lines.extend([
-        "",
-        "■業種補正コメント",
-        sector_comment(f"{sector33} {sector17} {market_segment}"),
-    ])
+    lines.extend(["", *render_period_index_table(periods)])
     return "\n".join(lines)
 
 

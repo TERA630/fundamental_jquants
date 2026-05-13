@@ -147,13 +147,18 @@ def build_fy_compare_line(
     current_year: str | None,
     previous_year: str | None,
     *,
+    value_kind: str = "money",
     is_percent: bool = False,
     include_yoy: bool = True,
     unit_suffix: str = "",
 ) -> str:
-    if is_percent:
+    resolved_kind = "percent" if is_percent else value_kind
+    if resolved_kind == "percent":
         current_text = fmt_plain_pct(current_value)
         previous_text = fmt_plain_pct(previous_value)
+    elif resolved_kind == "number":
+        current_text = f"{fmt_num(current_value)}{unit_suffix}"
+        previous_text = f"{fmt_num(previous_value)}{unit_suffix}"
     else:
         current_text = f"{fmt_money(current_value)}{unit_suffix}"
         previous_text = f"{fmt_money(previous_value)}{unit_suffix}"

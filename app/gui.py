@@ -10,7 +10,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from app.repositories import FileCache
 from app.services import FundamentalAnalysisService
-import fundamental_jquants_v7 as core
+from app.presenters import build_fundamental_output, fetch_watchlist
 
 
 class FundamentalApp:
@@ -98,7 +98,7 @@ class FundamentalApp:
         if not path:
             return
         try:
-            watchlist = core.load_watchlist(Path(path))
+            watchlist = fetch_watchlist(Path(path))
         except Exception as exc:
             messagebox.showerror("読込失敗", str(exc))
             return
@@ -163,7 +163,7 @@ class FundamentalApp:
     def _fetch_worker(self, name: str, code4: str, api_key: str):
         try:
             service = FundamentalAnalysisService(api_key=api_key, file_cache=self.file_cache)
-            output = service.build_analysis_output(name, code4, build_output_fn=core.build_output)
+            output = service.build_analysis_output(name, code4, build_output_fn=build_fundamental_output)
             self.output_cache[code4] = output
             self.master.after(0, lambda: self._render_output(output, f"生成完了: {name} ({code4}) / 財務=J-Quants / 株価=yFinance"))
         except Exception as exc:

@@ -147,13 +147,18 @@ def build_fy_compare_line(
     current_year: str | None,
     previous_year: str | None,
     *,
+    value_kind: str = "money",
     is_percent: bool = False,
     include_yoy: bool = True,
     unit_suffix: str = "",
 ) -> str:
-    if is_percent:
+    resolved_kind = "percent" if is_percent else value_kind
+    if resolved_kind == "percent":
         current_text = fmt_plain_pct(current_value)
         previous_text = fmt_plain_pct(previous_value)
+    elif resolved_kind == "number":
+        current_text = f"{fmt_num(current_value)}{unit_suffix}"
+        previous_text = f"{fmt_num(previous_value)}{unit_suffix}"
     else:
         current_text = f"{fmt_money(current_value)}{unit_suffix}"
         previous_text = f"{fmt_money(previous_value)}{unit_suffix}"
@@ -477,37 +482,6 @@ class FinancialPeriods:
     latest_fy: PeriodRecord | None
     prev_fy: PeriodRecord | None
     latest_quarter: PeriodRecord | None
-
-
-@dataclass(frozen=True)
-class OutputViewModel:
-    """GUI出力向けの表示DTO。ドメイン計算結果を表示責務に合わせて束ねる。"""
-
-    company_name: str
-    code4: str
-    sector33: str
-    market_cap_text: str
-    market_cap_band_label: str
-    latest_year: str | None
-    prev_year: str | None
-
-
-def build_output_view_model(
-    company_name: str,
-    code4: str,
-    sector33: str,
-    market_cap: float | None,
-    periods: FinancialPeriods,
-) -> OutputViewModel:
-    return OutputViewModel(
-        company_name=company_name,
-        code4=code4,
-        sector33=sector33 or "N/A",
-        market_cap_text=fmt_market_cap(market_cap),
-        market_cap_band_label=market_cap_band(market_cap),
-        latest_year=str(getattr(periods.latest_fy, "fiscal_year", "")) if periods.latest_fy else None,
-        prev_year=str(getattr(periods.prev_fy, "fiscal_year", "")) if periods.prev_fy else None,
-    )
     latest_any: PeriodRecord | None
 
 
@@ -540,7 +514,6 @@ def build_output_view_model(
         latest_year=str(getattr(periods.latest_fy, "fiscal_year", "")) if periods.latest_fy else None,
         prev_year=str(getattr(periods.prev_fy, "fiscal_year", "")) if periods.prev_fy else None,
     )
-
 
 def _as_text(value: Any) -> str:
     return "" if value is None else str(value).strip()

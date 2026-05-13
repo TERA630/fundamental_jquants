@@ -477,6 +477,37 @@ class FinancialPeriods:
     latest_fy: PeriodRecord | None
     prev_fy: PeriodRecord | None
     latest_quarter: PeriodRecord | None
+
+
+@dataclass(frozen=True)
+class OutputViewModel:
+    """GUI出力向けの表示DTO。ドメイン計算結果を表示責務に合わせて束ねる。"""
+
+    company_name: str
+    code4: str
+    sector33: str
+    market_cap_text: str
+    market_cap_band_label: str
+    latest_year: str | None
+    prev_year: str | None
+
+
+def build_output_view_model(
+    company_name: str,
+    code4: str,
+    sector33: str,
+    market_cap: float | None,
+    periods: FinancialPeriods,
+) -> OutputViewModel:
+    return OutputViewModel(
+        company_name=company_name,
+        code4=code4,
+        sector33=sector33 or "N/A",
+        market_cap_text=fmt_market_cap(market_cap),
+        market_cap_band_label=market_cap_band(market_cap),
+        latest_year=str(getattr(periods.latest_fy, "fiscal_year", "")) if periods.latest_fy else None,
+        prev_year=str(getattr(periods.prev_fy, "fiscal_year", "")) if periods.prev_fy else None,
+    )
     latest_any: PeriodRecord | None
 
 
@@ -1161,11 +1192,10 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
     lines.extend(render_quarter_table(periods, metrics))
     lines.append("")
 
-    latest_year = str(getattr(periods.latest_fy, "fiscal_year", "")) if periods.latest_fy else None
-    prev_year = str(getattr(periods.prev_fy, "fiscal_year", "")) if periods.prev_fy else None
+    view_model = build_output_view_model(company_name, code4, sector33, market_cap, periods)
 
     lines.extend([
-        f"{company_name} ({code4})",
+        f"{view_model.company_name} ({view_model.code4})",
         "■株価・割安性",
         f"株価　　　　：{fmt_num(price, 0)}円（yFinance取得）",
         f"PER(PEG)　　：{fmt_num(metrics.get('per'))}倍（{fmt_num(metrics.get('peg'))}倍）",
@@ -1174,17 +1204,17 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
         f"配当利回り　：{fmt_plain_pct(metrics.get('div_yield'))}（配当性向 {fmt_plain_pct(metrics.get('payout'))}）",
         "",
         "■時価総額・業種",
-        f"時価総額　　：{fmt_market_cap(market_cap)}　({market_cap_band(market_cap)})",
-        f"業種　　　　：{sector33 or 'N/A'}",
+        f"時価総額　　：{view_model.market_cap_text}　({view_model.market_cap_band_label})",
+        f"業種　　　　：{view_model.sector33}",
         "",
         "■主要指標",
         "",
-        build_fy_compare_line("売上高　　　", metrics.get("sales"), metrics.get("prev_sales"), latest_year, prev_year),
-        build_fy_compare_line("営業利益　　", metrics.get("op"), metrics.get("prev_op"), latest_year, prev_year),
-        build_fy_compare_line("営業利益率　", metrics.get("op_margin"), metrics.get("prev_op_margin"), latest_year, prev_year, value_kind="percent", include_yoy=False),
-        build_fy_compare_line("経常利益　　", metrics.get("ordinary"), metrics.get("prev_ordinary"), latest_year, prev_year),
-        build_fy_compare_line("純利益　　　", metrics.get("np"), metrics.get("prev_np"), latest_year, prev_year),
-        build_fy_compare_line("EPS　　　 　", metrics.get("eps"), metrics.get("prev_eps"), latest_year, prev_year, value_kind="number"),
+        build_fy_compare_line("売上高　　　", metrics.get("sales"), metrics.get("prev_sales"), view_model.latest_year, view_model.prev_year),
+        build_fy_compare_line("営業利益　　", metrics.get("op"), metrics.get("prev_op"), view_model.latest_year, view_model.prev_year),
+        build_fy_compare_line("営業利益率　", metrics.get("op_margin"), metrics.get("prev_op_margin"), view_model.latest_year, view_model.prev_year, value_kind="percent", include_yoy=False),
+        build_fy_compare_line("経常利益　　", metrics.get("ordinary"), metrics.get("prev_ordinary"), view_model.latest_year, view_model.prev_year),
+        build_fy_compare_line("純利益　　　", metrics.get("np"), metrics.get("prev_np"), view_model.latest_year, view_model.prev_year),
+        build_fy_compare_line("EPS　　　 　", metrics.get("eps"), metrics.get("prev_eps"), view_model.latest_year, view_model.prev_year, value_kind="number"),
         "",
         f"ROE　　　　 ：{fmt_plain_pct(metrics.get('roe'))}",
         f"自己資本比率：{fmt_plain_pct(metrics.get('eq_ratio'))}",

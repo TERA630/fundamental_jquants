@@ -8,9 +8,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from app.repositories import FileCache
-from app.services import FundamentalAnalysisService
-from app.presenters import build_fundamental_output, fetch_watchlist
+from app.gui_controller import FundamentalGuiController
 from app.gui_state import GuiState, build_default_output_filename, build_stock_choices, get_selected_stock
 
 
@@ -23,7 +21,7 @@ class FundamentalApp:
         self.master.geometry("1040x820")
 
         self.state = GuiState()
-        self.file_cache = FileCache()
+        self.controller = FundamentalGuiController()
 
         self.api_key_var = tk.StringVar(value=os.environ.get("JQUANTS_API_KEY", ""))
         self.path_var = tk.StringVar(value="監視銘柄ファイル未選択")
@@ -95,7 +93,7 @@ class FundamentalApp:
         if not path:
             return
         try:
-            watchlist = fetch_watchlist(Path(path))
+            watchlist = self.controller.fetch_watchlist_entries(Path(path))
         except Exception as exc:
             messagebox.showerror("読込失敗", str(exc))
             return
@@ -153,9 +151,12 @@ class FundamentalApp:
 
     def _fetch_worker(self, name: str, code4: str, api_key: str):
         try:
-            service = FundamentalAnalysisService(api_key=api_key, file_cache=self.file_cache)
-            output = service.build_analysis_output(name, code4, build_output_fn=build_fundamental_output)
-            self.state.output_cache[code4] = output
+            output = self.controller.fetch_analysis_output(
+                api_key=api_key,
+                name=name,
+                code4=code4,
+                output_cache=self.state.output_cache,
+            )
             self.master.after(0, lambda: self._render_output(output, f"生成完了: {name} ({code4}) / 財務=J-Quants / 株価=yFinance"))
         except Exception as exc:
             error_message = str(exc)

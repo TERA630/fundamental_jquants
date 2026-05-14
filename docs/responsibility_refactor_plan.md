@@ -109,6 +109,7 @@
 
 ### Phase 3: GUIのMVP分離（中リスク）
 - 進捗メモ(2026-05-14): GUI状態を `app/gui_state.py` へ抽出し、`FundamentalApp` は画面描画とイベント連携を中心に担当する構成へ一歩前進。
+- 進捗メモ(2026-05-14): `app/gui_controller.py` を追加し、監視銘柄読込と分析出力取得のユースケース仲介をGUI本体から分離。
 - `app/gui.py` を以下へ分割:
   - `app/gui/view.py`（Widget構築）
   - `app/gui/view_model.py`（表示用状態）

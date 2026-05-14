@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+
+logger = logging.getLogger(__name__)
 
 
 def calc_yoy(current: float | None, previous: float | None) -> float | None:
@@ -53,10 +57,15 @@ def calc_metrics(periods: Any, price: float | None) -> dict[str, float | str | N
     def get_value(row: dict[str, Any] | None, short_keys: list[str], long_keys: list[str] | None = None) -> float | None:
         if not row:
             return None
-        keys = list(short_keys)
+        short_value = first_present(row, short_keys)
+        if short_value not in (None, ""):
+            return safe_float(short_value)
         if long_keys:
-            keys += long_keys
-        return safe_float(first_present(row, keys))
+            long_value = first_present(row, long_keys)
+            if long_value not in (None, ""):
+                logger.warning("V2短縮キー未検出のため互換キーを使用: short=%s long=%s", short_keys, long_keys)
+                return safe_float(long_value)
+        return None
 
     latest_fy_rec = periods.latest_fy
     prev_fy_rec = periods.prev_fy
@@ -75,6 +84,7 @@ def calc_metrics(periods: Any, price: float | None) -> dict[str, float | str | N
     op = get_value(latest_fy, ["OP", "Op"], ["OperatingProfit", "OperatingIncome"])
     prev_op = get_value(prev_fy, ["OP", "Op"], ["OperatingProfit", "OperatingIncome"])
     ordinary = get_value(latest_fy, ["OrdP", "OdP", "OrdinaryProfit"], ["OrdinaryIncome"])
+    prev_ordinary = get_value(prev_fy, ["OrdP", "OdP", "OrdinaryProfit"], ["OrdinaryIncome"])
     np = get_value(latest_fy, ["NP"], ["Profit", "NetIncome", "ProfitAttributableToOwnersOfParent"])
     prev_np = get_value(prev_fy, ["NP"], ["Profit", "NetIncome", "ProfitAttributableToOwnersOfParent"])
 
@@ -94,6 +104,7 @@ def calc_metrics(periods: Any, price: float | None) -> dict[str, float | str | N
     fcf = None if ocf is None or icf is None else ocf + icf
 
     op_margin = None if sales in (None, 0) or op is None else op / sales * 100
+    prev_op_margin = None if prev_sales in (None, 0) or prev_op is None else prev_op / prev_sales * 100
     yoy_sales = calc_yoy(sales, prev_sales)
     op_yoy = None
     if op is not None and prev_op not in (None, 0) and prev_op is not None and prev_op > 0 and op >= 0:
@@ -107,18 +118,27 @@ def calc_metrics(periods: Any, price: float | None) -> dict[str, float | str | N
     peg = None if per is None or growth_for_peg in (None, 0) or growth_for_peg is None or growth_for_peg <= 0 else per / growth_for_peg
 
     forecast_source = latest_quarter or latest_fy
+    next_source = latest_fy
     forecast_sales = get_value(forecast_source, ["FSales"], ["ForecastSales"])
     forecast_op = get_value(forecast_source, ["FOP"], ["ForecastOperatingProfit"])
+    forecast_ordinary = get_value(forecast_source, ["FOdP"], ["ForecastOrdinaryProfit"])
+    forecast_np = get_value(forecast_source, ["FNP"], ["ForecastProfit", "ForecastNetIncome"])
     forecast_eps = get_value(forecast_source, ["FEPS"], ["ForecastEarningsPerShare"])
-    next_sales = get_value(forecast_source, ["NxFSales"], ["NextFiscalYearForecastSales"])
-    next_op = get_value(forecast_source, ["NxFOP"], ["NextFiscalYearForecastOperatingProfit"])
-    next_eps = get_value(forecast_source, ["NxFEPS"], ["NextFiscalYearForecastEarningsPerShare"])
+    next_sales = get_value(next_source, ["NxFSales"], ["NextFiscalYearForecastSales"])
+    next_op = get_value(next_source, ["NxFOP"], ["NextFiscalYearForecastOperatingProfit"])
+    next_ordinary = get_value(next_source, ["NxFOdP"], ["NextFiscalYearForecastOrdinaryProfit"])
+    next_np = get_value(next_source, ["NxFNP"], ["NextFiscalYearForecastProfit", "NextFiscalYearForecastNetIncome"])
+    next_eps = get_value(next_source, ["NxFEPS"], ["NextFiscalYearForecastEarningsPerShare"])
 
     forecast_sales_yoy = calc_yoy(forecast_sales, sales)
     forecast_op_yoy = calc_yoy(forecast_op, op)
+    forecast_ordinary_yoy = calc_yoy(forecast_ordinary, ordinary)
+    forecast_np_yoy = calc_yoy(forecast_np, np)
     forecast_eps_yoy = calc_yoy(forecast_eps, eps)
     next_sales_yoy = calc_yoy(next_sales, forecast_sales)
     next_op_yoy = calc_yoy(next_op, forecast_op)
+    next_ordinary_yoy = calc_yoy(next_ordinary, forecast_ordinary)
+    next_np_yoy = calc_yoy(next_np, forecast_np)
     next_eps_yoy = calc_yoy(next_eps, forecast_eps)
 
     progress_label, progress_base = progress_base_from_period_type(latest_quarter_rec.period_type if latest_quarter_rec else None)
@@ -128,14 +148,16 @@ def calc_metrics(periods: Any, price: float | None) -> dict[str, float | str | N
     op_progress = None if actual_progress_op is None or forecast_op in (None, 0) or forecast_op <= 0 or actual_progress_op < 0 else actual_progress_op / forecast_op * 100
 
     return {
-        "sales": sales, "prev_sales": prev_sales, "op": op, "prev_op": prev_op, "ordinary": ordinary,
+        "sales": sales, "prev_sales": prev_sales, "op": op, "prev_op": prev_op, "ordinary": ordinary, "prev_ordinary": prev_ordinary,
         "np": np, "prev_np": prev_np, "eps": eps, "prev_eps": prev_eps, "bps": bps, "eq_ratio": eq_ratio,
-        "div_ann": div_ann, "payout": payout, "ocf": ocf, "icf": icf, "fcf": fcf, "op_margin": op_margin,
+        "div_ann": div_ann, "payout": payout, "ocf": ocf, "icf": icf, "fcf": fcf, "op_margin": op_margin, "prev_op_margin": prev_op_margin,
         "yoy_sales": yoy_sales, "op_yoy": op_yoy, "roe": roe, "ocf_np_ratio": ocf_np_ratio, "per": per,
         "pbr": pbr, "div_yield": div_yield, "peg": peg, "forecast_sales": forecast_sales, "forecast_op": forecast_op,
-        "forecast_eps": forecast_eps, "forecast_sales_yoy": forecast_sales_yoy, "forecast_op_yoy": forecast_op_yoy,
-        "forecast_eps_yoy": forecast_eps_yoy, "next_sales": next_sales, "next_op": next_op, "next_eps": next_eps,
-        "next_sales_yoy": next_sales_yoy, "next_op_yoy": next_op_yoy, "next_eps_yoy": next_eps_yoy,
+        "forecast_ordinary": forecast_ordinary, "forecast_np": forecast_np, "forecast_eps": forecast_eps,
+        "forecast_sales_yoy": forecast_sales_yoy, "forecast_op_yoy": forecast_op_yoy,
+        "forecast_ordinary_yoy": forecast_ordinary_yoy, "forecast_np_yoy": forecast_np_yoy, "forecast_eps_yoy": forecast_eps_yoy,
+        "next_sales": next_sales, "next_op": next_op, "next_ordinary": next_ordinary, "next_np": next_np, "next_eps": next_eps,
+        "next_sales_yoy": next_sales_yoy, "next_op_yoy": next_op_yoy, "next_ordinary_yoy": next_ordinary_yoy, "next_np_yoy": next_np_yoy, "next_eps_yoy": next_eps_yoy,
         "sales_progress": sales_progress, "op_progress": op_progress, "progress_label": progress_label,
         "progress_base": progress_base, "latest_fy_label": format_period_record(latest_fy_rec),
         "prev_fy_label": format_period_record(prev_fy_rec), "latest_quarter_label": format_period_record(latest_quarter_rec),

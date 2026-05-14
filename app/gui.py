@@ -11,6 +11,7 @@ from tkinter import filedialog, messagebox
 from app.gui_controller import FundamentalGuiController
 from app.gui_state import GuiState, build_default_output_filename, build_stock_choices, get_selected_stock
 from app.gui_view import FundamentalView
+from app.gui_view_model import GuiViewModel
 
 
 class FundamentalApp:
@@ -29,6 +30,7 @@ class FundamentalApp:
         self.stock_var = tk.StringVar()
         self.status_var = tk.StringVar(value="監視銘柄ファイルを読み込んでください。")
 
+        self.view_model = GuiViewModel()
         self.view = FundamentalView(self.master, self.api_key_var, self.path_var, self.stock_var, self.status_var)
         self.view.build_ui(
             on_open=self.open_watchlist,
@@ -68,14 +70,14 @@ class FundamentalApp:
 
         if values:
             self.stock_var.set(values[0])
-            self.status_var.set(f"{len(values)}件の監視銘柄を読み込みました。")
+            self.status_var.set(self.view_model.build_loaded_status(len(values)))
         else:
             self.stock_var.set("")
             self.view.clear_text()
             self.status_var.set("銘柄が見つかりませんでした。")
 
     def on_stock_selected(self, _event=None):
-        self.status_var.set("銘柄を選択しました。取得ボタンを押してください。")
+        self.status_var.set(self.view_model.build_selected_status())
 
     def selected_stock(self) -> tuple[str, str] | None:
         return get_selected_stock(self.state.display_to_code, self.stock_var.get())
@@ -83,7 +85,7 @@ class FundamentalApp:
     def _require_selected_stock(self) -> tuple[str, str] | None:
         selected = self.selected_stock()
         if selected is None:
-            self.status_var.set("先に監視銘柄ファイルと銘柄を選んでください。")
+            self.status_var.set(self.view_model.build_missing_stock_status())
             return None
         return selected
 
@@ -110,7 +112,7 @@ class FundamentalApp:
                 code4=code4,
                 output_cache=self.state.output_cache,
             )
-            self.master.after(0, lambda: self._render_output(output, f"生成完了: {name} ({code4}) / 財務=J-Quants / 株価=yFinance"))
+            self.master.after(0, lambda: self._render_output(output, self.view_model.build_generated_status(name, code4)))
         except Exception as exc:
             self.master.after(0, lambda msg=str(exc): self._handle_fetch_error(msg))
 
@@ -129,26 +131,26 @@ class FundamentalApp:
         name, code4 = selected
         cached_output = self.state.output_cache.get(code4)
         if cached_output is not None:
-            self._render_output(cached_output, f"キャッシュ表示: {name} ({code4})")
+            self._render_output(cached_output, self.view_model.build_cached_status(name, code4))
             return
 
-        self.set_busy(True, f"取得中: {name} ({code4}) / 財務=J-Quants / 株価=yFinance")
+        self.set_busy(True, self.view_model.build_fetching_status(name, code4))
         thread = threading.Thread(target=self._fetch_worker, args=(name, code4, api_key), daemon=True)
         thread.start()
 
     def copy_text(self):
         content = self.view.get_text_content()
         if not content:
-            self.status_var.set("コピーするテキストがありません。")
+            self.status_var.set(self.view_model.build_missing_copy_content_status())
             return
         self.master.clipboard_clear()
         self.master.clipboard_append(content)
-        self.status_var.set("クリップボードにコピーしました。")
+        self.status_var.set(self.view_model.build_copied_status())
 
     def save_text(self):
         content = self.view.get_text_content()
         if not content:
-            self.status_var.set("保存するテキストがありません。")
+            self.status_var.set(self.view_model.build_missing_save_content_status())
             return
         selected = self.selected_stock()
         default_name = build_default_output_filename(selected)
@@ -168,7 +170,7 @@ class FundamentalApp:
             messagebox.showerror("保存失敗", f"ファイルを書き込めませんでした: {exc}")
             self.status_var.set("保存に失敗しました。")
             return
-        self.status_var.set(f"保存完了: {path}")
+        self.status_var.set(self.view_model.build_saved_status(path))
 
 
 __all__ = ["FundamentalApp"]

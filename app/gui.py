@@ -1,4 +1,4 @@
-"""GUI layer: Tkinter application wiring and presentation logic."""
+"""GUI layer: Tkinter application wiring and event handling."""
 
 from __future__ import annotations
 
@@ -6,14 +6,15 @@ import os
 import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox
 
 from app.gui_controller import FundamentalGuiController
 from app.gui_state import GuiState, build_default_output_filename, build_stock_choices, get_selected_stock
+from app.gui_view import FundamentalView
 
 
 class FundamentalApp:
-    """GUI層: 画面表示・UI状態管理・ユースケース呼び出しを担当。"""
+    """GUI層: 画面イベント連携と状態遷移を担当。"""
 
     def __init__(self, master: tk.Tk):
         self.master = master
@@ -28,62 +29,18 @@ class FundamentalApp:
         self.stock_var = tk.StringVar()
         self.status_var = tk.StringVar(value="監視銘柄ファイルを読み込んでください。")
 
-        self._build_ui()
-
-    def _build_ui(self):
-        root = ttk.Frame(self.master, padding=10)
-        root.pack(fill="both", expand=True)
-
-        api_frame = ttk.Frame(root)
-        api_frame.pack(fill="x", pady=(0, 8))
-        ttk.Label(api_frame, text="J-Quants APIキー").pack(side="left")
-        self.api_entry = ttk.Entry(api_frame, textvariable=self.api_key_var, show="*", width=56)
-        self.api_entry.pack(side="left", padx=(8, 8))
-        ttk.Label(api_frame, text="環境変数 JQUANTS_API_KEY も可").pack(side="left")
-
-        top = ttk.Frame(root)
-        top.pack(fill="x", pady=(0, 8))
-        self.open_button = ttk.Button(top, text="監視銘柄ファイルを開く", command=self.open_watchlist)
-        self.open_button.pack(side="left")
-        ttk.Label(top, textvariable=self.path_var).pack(side="left", padx=10, fill="x", expand=True)
-
-        control = ttk.Frame(root)
-        control.pack(fill="x", pady=(0, 8))
-        ttk.Label(control, text="銘柄選択").pack(side="left")
-        self.stock_combo = ttk.Combobox(control, textvariable=self.stock_var, state="readonly", width=42)
-        self.stock_combo.pack(side="left", padx=(8, 12))
-        self.stock_combo.bind("<<ComboboxSelected>>", self.on_stock_selected)
-        ttk.Label(control, text="株価: yFinance固定").pack(side="left", padx=(0, 12))
-        self.fetch_button = ttk.Button(control, text="取得", command=self.generate_text)
-        self.fetch_button.pack(side="left", padx=(0, 6))
-        self.copy_button = ttk.Button(control, text="コピー", command=self.copy_text)
-        self.copy_button.pack(side="left", padx=(0, 6))
-        self.save_button = ttk.Button(control, text="保存", command=self.save_text)
-        self.save_button.pack(side="left")
-
-        ttk.Label(root, textvariable=self.status_var).pack(fill="x", pady=(0, 6))
-
-        text_frame = ttk.Frame(root)
-        text_frame.pack(fill="both", expand=True)
-        self.text = tk.Text(text_frame, wrap="word", font=("Yu Gothic UI", 11))
-        self.text.pack(side="left", fill="both", expand=True)
-        scroll = ttk.Scrollbar(text_frame, orient="vertical", command=self.text.yview)
-        scroll.pack(side="right", fill="y")
-        self.text.configure(yscrollcommand=scroll.set)
+        self.view = FundamentalView(self.master, self.api_key_var, self.path_var, self.stock_var, self.status_var)
+        self.view.build_ui(
+            on_open=self.open_watchlist,
+            on_select=self.on_stock_selected,
+            on_fetch=self.generate_text,
+            on_copy=self.copy_text,
+            on_save=self.save_text,
+        )
 
     def set_busy(self, busy: bool, status: str | None = None):
         self.state.is_fetching = busy
-        state = "disabled" if busy else "normal"
-        readonly_state = "disabled" if busy else "readonly"
-        self.open_button.configure(state=state)
-        self.fetch_button.configure(state=state)
-        self.copy_button.configure(state=state)
-        self.save_button.configure(state=state)
-        self.api_entry.configure(state=state)
-        self.stock_combo.configure(state=readonly_state)
-        if status is not None:
-            self.status_var.set(status)
-        self.master.update_idletasks()
+        self.view.set_busy(busy, status)
 
     def open_watchlist(self):
         path = filedialog.askopenfilename(
@@ -107,24 +64,21 @@ class FundamentalApp:
     def _populate_stock_choices(self) -> None:
         values, mapping = build_stock_choices(self.state.watchlist)
         self.state.display_to_code = mapping
-        self.stock_combo["values"] = values
+        self.view.set_stock_choices(values)
 
         if values:
             self.stock_var.set(values[0])
             self.status_var.set(f"{len(values)}件の監視銘柄を読み込みました。")
         else:
             self.stock_var.set("")
-            self.text.delete("1.0", tk.END)
+            self.view.clear_text()
             self.status_var.set("銘柄が見つかりませんでした。")
 
     def on_stock_selected(self, _event=None):
         self.status_var.set("銘柄を選択しました。取得ボタンを押してください。")
 
     def selected_stock(self) -> tuple[str, str] | None:
-        label = self.stock_var.get().strip()
-        if not label:
-            return None
-        return get_selected_stock(self.state.display_to_code, label)
+        return get_selected_stock(self.state.display_to_code, self.stock_var.get())
 
     def _require_selected_stock(self) -> tuple[str, str] | None:
         selected = self.selected_stock()
@@ -141,8 +95,7 @@ class FundamentalApp:
         return None
 
     def _render_output(self, output: str, status: str):
-        self.text.delete("1.0", tk.END)
-        self.text.insert("1.0", output)
+        self.view.render_output(output)
         self.set_busy(False, status)
 
     def _handle_fetch_error(self, message: str):
@@ -159,8 +112,7 @@ class FundamentalApp:
             )
             self.master.after(0, lambda: self._render_output(output, f"生成完了: {name} ({code4}) / 財務=J-Quants / 株価=yFinance"))
         except Exception as exc:
-            error_message = str(exc)
-            self.master.after(0, lambda msg=error_message: self._handle_fetch_error(msg))
+            self.master.after(0, lambda msg=str(exc): self._handle_fetch_error(msg))
 
     def generate_text(self):
         if self.state.is_fetching:
@@ -185,7 +137,7 @@ class FundamentalApp:
         thread.start()
 
     def copy_text(self):
-        content = self.text.get("1.0", tk.END).strip()
+        content = self.view.get_text_content()
         if not content:
             self.status_var.set("コピーするテキストがありません。")
             return
@@ -194,7 +146,7 @@ class FundamentalApp:
         self.status_var.set("クリップボードにコピーしました。")
 
     def save_text(self):
-        content = self.text.get("1.0", tk.END).strip()
+        content = self.view.get_text_content()
         if not content:
             self.status_var.set("保存するテキストがありません。")
             return

@@ -114,6 +114,7 @@
   - `app/gui/view.py`（Widget構築）
   - `app/gui/view_model.py`（表示用状態）
   - `app/gui/controller.py`（イベント処理）
+- 進捗メモ(2026-05-14): `app/gui_view.py` を追加し、Widget構築と描画更新を `FundamentalView` へ分離。
 - 非同期取得は `controller` に集約し、`view` は描画専任化。
 
 ### Phase 4: 依存逆転とテスト戦略（中〜高リスク）

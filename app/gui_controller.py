@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.presenters import build_fundamental_output, fetch_watchlist
-from app.repositories import FileCache
+from app.repositories import FileCache, fetch_jquants_api_key
 from app.services import FundamentalAnalysisService
 
 
@@ -17,6 +17,9 @@ class FundamentalGuiController:
 
     def fetch_watchlist_entries(self, path: Path) -> list[tuple[str, str]]:
         return fetch_watchlist(path)
+
+    def fetch_api_key(self, preferred_key: str) -> str:
+        return fetch_jquants_api_key(preferred_key)
 
     def fetch_analysis_output(self, *, api_key: str, name: str, code4: str, output_cache: dict[str, str]) -> str:
         cached_output = output_cache.get(code4)

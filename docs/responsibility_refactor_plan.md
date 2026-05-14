@@ -108,6 +108,7 @@
 - 完了後に `fundamental_jquants_v7.py` 依存を外す。
 
 ### Phase 3: GUIのMVP分離（中リスク）
+- 進捗メモ(2026-05-14): GUI状態を `app/gui_state.py` へ抽出し、`FundamentalApp` は画面描画とイベント連携を中心に担当する構成へ一歩前進。
 - `app/gui.py` を以下へ分割:
   - `app/gui/view.py`（Widget構築）
   - `app/gui/view_model.py`（表示用状態）

@@ -102,6 +102,7 @@
 - 目的: 変更時の影響範囲縮小、レビュー容易化。
 
 ### Phase 2: legacy 段階移管（中リスク）
+- 進捗メモ(2026-05-13): 出力生成のエントリを `app/domain/builders/fundamental_output.py` へ新設し、`app/presenters.py` から呼び出す構成へ変更済み。
 - `fundamental_jquants_v7.py` の `build_output` 相当を新規 `build_*` 関数として `app/domain/builders/` へ移植。
 - `app/presenters.py` は一時的に façade として残し、内部実装を新ドメイン関数へ切替。
 - 完了後に `fundamental_jquants_v7.py` 依存を外す。

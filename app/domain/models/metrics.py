@@ -84,6 +84,7 @@ def calc_metrics(periods: Any, price: float | None) -> dict[str, float | str | N
     op = get_value(latest_fy, ["OP", "Op"], ["OperatingProfit", "OperatingIncome"])
     prev_op = get_value(prev_fy, ["OP", "Op"], ["OperatingProfit", "OperatingIncome"])
     ordinary = get_value(latest_fy, ["OrdP", "OdP", "OrdinaryProfit"], ["OrdinaryIncome"])
+    prev_ordinary = get_value(prev_fy, ["OrdP", "OdP", "OrdinaryProfit"], ["OrdinaryIncome"])
     np = get_value(latest_fy, ["NP"], ["Profit", "NetIncome", "ProfitAttributableToOwnersOfParent"])
     prev_np = get_value(prev_fy, ["NP"], ["Profit", "NetIncome", "ProfitAttributableToOwnersOfParent"])
 
@@ -103,6 +104,7 @@ def calc_metrics(periods: Any, price: float | None) -> dict[str, float | str | N
     fcf = None if ocf is None or icf is None else ocf + icf
 
     op_margin = None if sales in (None, 0) or op is None else op / sales * 100
+    prev_op_margin = None if prev_sales in (None, 0) or prev_op is None else prev_op / prev_sales * 100
     yoy_sales = calc_yoy(sales, prev_sales)
     op_yoy = None
     if op is not None and prev_op not in (None, 0) and prev_op is not None and prev_op > 0 and op >= 0:
@@ -146,9 +148,9 @@ def calc_metrics(periods: Any, price: float | None) -> dict[str, float | str | N
     op_progress = None if actual_progress_op is None or forecast_op in (None, 0) or forecast_op <= 0 or actual_progress_op < 0 else actual_progress_op / forecast_op * 100
 
     return {
-        "sales": sales, "prev_sales": prev_sales, "op": op, "prev_op": prev_op, "ordinary": ordinary,
+        "sales": sales, "prev_sales": prev_sales, "op": op, "prev_op": prev_op, "ordinary": ordinary, "prev_ordinary": prev_ordinary,
         "np": np, "prev_np": prev_np, "eps": eps, "prev_eps": prev_eps, "bps": bps, "eq_ratio": eq_ratio,
-        "div_ann": div_ann, "payout": payout, "ocf": ocf, "icf": icf, "fcf": fcf, "op_margin": op_margin,
+        "div_ann": div_ann, "payout": payout, "ocf": ocf, "icf": icf, "fcf": fcf, "op_margin": op_margin, "prev_op_margin": prev_op_margin,
         "yoy_sales": yoy_sales, "op_yoy": op_yoy, "roe": roe, "ocf_np_ratio": ocf_np_ratio, "per": per,
         "pbr": pbr, "div_yield": div_yield, "peg": peg, "forecast_sales": forecast_sales, "forecast_op": forecast_op,
         "forecast_ordinary": forecast_ordinary, "forecast_np": forecast_np, "forecast_eps": forecast_eps,

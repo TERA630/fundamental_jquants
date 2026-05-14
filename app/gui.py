@@ -11,6 +11,7 @@ from tkinter import filedialog, messagebox, ttk
 from app.repositories import FileCache
 from app.services import FundamentalAnalysisService
 from app.presenters import build_fundamental_output, fetch_watchlist
+from app.gui_state import GuiState, build_default_output_filename, build_stock_choices, get_selected_stock
 
 
 class FundamentalApp:
@@ -21,12 +22,8 @@ class FundamentalApp:
         self.master.title("J-Quants ファンダメンタル評価 v7（プレーンテキスト / 株価yFinance固定）")
         self.master.geometry("1040x820")
 
-        self.watchlist_path: Path | None = None
-        self.watchlist: list[tuple[str, str]] = []
-        self.display_to_code: dict[str, tuple[str, str]] = {}
-        self.output_cache: dict[str, str] = {}
+        self.state = GuiState()
         self.file_cache = FileCache()
-        self.is_fetching = False
 
         self.api_key_var = tk.StringVar(value=os.environ.get("JQUANTS_API_KEY", ""))
         self.path_var = tk.StringVar(value="監視銘柄ファイル未選択")
@@ -77,7 +74,7 @@ class FundamentalApp:
         self.text.configure(yscrollcommand=scroll.set)
 
     def set_busy(self, busy: bool, status: str | None = None):
-        self.is_fetching = busy
+        self.state.is_fetching = busy
         state = "disabled" if busy else "normal"
         readonly_state = "disabled" if busy else "readonly"
         self.open_button.configure(state=state)
@@ -103,21 +100,15 @@ class FundamentalApp:
             messagebox.showerror("読込失敗", str(exc))
             return
 
-        self.watchlist_path = Path(path)
-        self.watchlist = watchlist
-        self.output_cache.clear()
-        self.path_var.set(str(self.watchlist_path))
+        self.state.watchlist_path = Path(path)
+        self.state.watchlist = watchlist
+        self.state.output_cache.clear()
+        self.path_var.set(str(self.state.watchlist_path))
         self._populate_stock_choices()
 
     def _populate_stock_choices(self) -> None:
-        values: list[str] = []
-        mapping: dict[str, tuple[str, str]] = {}
-        for name, code in self.watchlist:
-            display = f"{name} ({code})"
-            values.append(display)
-            mapping[display] = (name, code)
-
-        self.display_to_code = mapping
+        values, mapping = build_stock_choices(self.state.watchlist)
+        self.state.display_to_code = mapping
         self.stock_combo["values"] = values
 
         if values:
@@ -135,7 +126,7 @@ class FundamentalApp:
         label = self.stock_var.get().strip()
         if not label:
             return None
-        return self.display_to_code.get(label)
+        return get_selected_stock(self.state.display_to_code, label)
 
     def _require_selected_stock(self) -> tuple[str, str] | None:
         selected = self.selected_stock()
@@ -164,14 +155,14 @@ class FundamentalApp:
         try:
             service = FundamentalAnalysisService(api_key=api_key, file_cache=self.file_cache)
             output = service.build_analysis_output(name, code4, build_output_fn=build_fundamental_output)
-            self.output_cache[code4] = output
+            self.state.output_cache[code4] = output
             self.master.after(0, lambda: self._render_output(output, f"生成完了: {name} ({code4}) / 財務=J-Quants / 株価=yFinance"))
         except Exception as exc:
             error_message = str(exc)
             self.master.after(0, lambda msg=error_message: self._handle_fetch_error(msg))
 
     def generate_text(self):
-        if self.is_fetching:
+        if self.state.is_fetching:
             return
 
         selected = self._require_selected_stock()
@@ -183,7 +174,7 @@ class FundamentalApp:
             return
 
         name, code4 = selected
-        cached_output = self.output_cache.get(code4)
+        cached_output = self.state.output_cache.get(code4)
         if cached_output is not None:
             self._render_output(cached_output, f"キャッシュ表示: {name} ({code4})")
             return
@@ -207,11 +198,8 @@ class FundamentalApp:
             self.status_var.set("保存するテキストがありません。")
             return
         selected = self.selected_stock()
-        default_name = "stock_fundamental_prompt.txt"
-        if selected is not None:
-            _, code = selected
-            default_name = f"stock_fundamental_prompt_{code}.txt"
-        initial_dir = str(self.watchlist_path.parent) if self.watchlist_path else str(Path.cwd())
+        default_name = build_default_output_filename(selected)
+        initial_dir = str(self.state.watchlist_path.parent) if self.state.watchlist_path else str(Path.cwd())
         path = filedialog.asksaveasfilename(
             title="保存先を選択",
             defaultextension=".txt",

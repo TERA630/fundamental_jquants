@@ -1,4 +1,4 @@
-"""Presentation helpers: bridge GUI use-cases and legacy output builders."""
+"""Presentation helpers: bridge GUI use-cases and domain/output builders."""
 
 from __future__ import annotations
 
@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any
 
 import fundamental_jquants_v7 as legacy
+
+from app.domain.builders.fundamental_output import build_fundamental_output_text
 
 
 def fetch_watchlist(path: Path) -> list[tuple[str, str]]:
@@ -22,8 +24,8 @@ def build_fundamental_output(
     price: float | None,
     market_cap: float | None,
 ) -> str:
-    """既存の出力生成を呼び出すプレゼンテーション向けアダプター。"""
-    return legacy.build_output(
+    """ドメイン層の出力生成ビルダーを呼び出す。"""
+    return build_fundamental_output_text(
         name=name,
         code4=code4,
         master=master,

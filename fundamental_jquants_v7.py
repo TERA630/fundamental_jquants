@@ -1193,21 +1193,17 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
         "",
     ])
 
-    lines.extend(render_quarter_table(periods, metrics))
-    lines.append("")
-
     view_model = build_output_view_model(company_name, code4, sector33, market_cap, periods)
 
     lines.extend([
-        f"{view_model.company_name} ({view_model.code4})",
-        "■株価・割安性",
+        "■株価･割安性",
         f"株価　　　　：{fmt_num(price, 0)}円（yFinance取得）",
         f"PER(PEG)　　：{fmt_num(metrics.get('per'))}倍（{fmt_num(metrics.get('peg'))}倍）",
         f"PBR　　　 　：{fmt_num(metrics.get('pbr'))}倍",
         f"EPS/BPS　 　：{fmt_num(metrics.get('eps'))}円 / {fmt_num(metrics.get('bps'))}円",
         f"配当利回り　：{fmt_plain_pct(metrics.get('div_yield'))}（配当性向 {fmt_plain_pct(metrics.get('payout'))}）",
         "",
-        "■時価総額・業種",
+        "■時価総額･業種",
         f"時価総額　　：{view_model.market_cap_text}　({view_model.market_cap_band_label})",
         f"業種　　　　：{view_model.sector33}",
         "",
@@ -1224,19 +1220,20 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
         f"自己資本比率：{fmt_plain_pct(metrics.get('eq_ratio'))}",
         f"営業CF　　　：{fmt_money(metrics.get('ocf'))}",
         "",
-        "■会社予想・進捗",
-        "",
-        "【今期会社予想】",
+        "■今期会社予想",
         f"売上予想：{fmt_money(metrics.get('forecast_sales'))}（YoY {fmt_pct(metrics.get('forecast_sales_yoy'))}） → {service_rank_forecast_yoy(metrics.get('forecast_sales_yoy'))}",
         f"営業利益予想：{fmt_money(metrics.get('forecast_op'))}（YoY {fmt_pct(metrics.get('forecast_op_yoy'))}） → {service_rank_forecast_yoy(metrics.get('forecast_op_yoy'))}",
         f"EPS予想：{fmt_num(metrics.get('forecast_eps'))}円（YoY {fmt_pct(metrics.get('forecast_eps_yoy'))}）",
         "",
-        "【来期予想】",
+        "■直近四半期･進捗",
+        *render_quarter_table(periods, metrics)[1:],
+        "",
+        "■来季予想",
         f"売上予想：{fmt_money(metrics.get('next_sales'))}（今期比 {fmt_pct(metrics.get('next_sales_yoy'))}） → {service_rank_next_yoy(metrics.get('next_sales_yoy'))}",
         f"営業利益予想：{fmt_money(metrics.get('next_op'))}（今期比 {fmt_pct(metrics.get('next_op_yoy'))}） → {service_rank_next_yoy(metrics.get('next_op_yoy'))}",
         f"EPS予想：{fmt_num(metrics.get('next_eps'))}円（今期比 {fmt_pct(metrics.get('next_eps_yoy'))}）",
         "",
-        "■キャッシュフロー",
+        "■ キャッシュフロー",
         f"営業CF：{fmt_money(metrics.get('ocf'))}",
         f"投資CF：{fmt_money(metrics.get('icf'))}",
         f"簡易FCF：{fmt_money(metrics.get('fcf'))}",
@@ -1256,7 +1253,7 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
     if len(lines) > 0 and lines[-1] == "■評価コメント":
         lines.append("明確な強弱は限定的。テクニカル位置と決算進捗を併せて判断する。")
 
-    lines.extend(["", *render_period_index_table(periods)])
+    lines.extend(["", "■取得済み決算期間整理", *render_period_index_table(periods)[1:]])
     return "\n".join(lines)
 
 

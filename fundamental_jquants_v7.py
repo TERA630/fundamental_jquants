@@ -1231,6 +1231,8 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
         "■来季予想",
         f"売上予想：{fmt_money(metrics.get('next_sales'))}（今期比 {fmt_pct(metrics.get('next_sales_yoy'))}） → {service_rank_next_yoy(metrics.get('next_sales_yoy'))}",
         f"営業利益予想：{fmt_money(metrics.get('next_op'))}（今期比 {fmt_pct(metrics.get('next_op_yoy'))}） → {service_rank_next_yoy(metrics.get('next_op_yoy'))}",
+        f"経常利益予想：{fmt_money(metrics.get('next_ordinary'))}（今期比 {fmt_pct(metrics.get('next_ordinary_yoy'))}）",
+        f"当期純利益予想：{fmt_money(metrics.get('next_np'))}（今期比 {fmt_pct(metrics.get('next_np_yoy'))}）",
         f"EPS予想：{fmt_num(metrics.get('next_eps'))}円（今期比 {fmt_pct(metrics.get('next_eps_yoy'))}）",
         "",
         "■ キャッシュフロー",

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, Protocol
 
 from app.data.file_cache import FileCache
 from app.data.jquants_client import JQuantsClient
@@ -14,12 +14,28 @@ CACHE_TTL_SUMMARY_SEC = 24 * 60 * 60
 CACHE_TTL_YF_SEC = 12 * 60 * 60
 
 
+class JQuantsClientPort(Protocol):
+    def get_master(self, code: str) -> dict[str, Any] | None: ...
+    def get_summary(self, code: str) -> list[dict[str, Any]]: ...
+
+
+class MarketDataProviderPort(Protocol):
+    def __call__(self, code4: str) -> dict[str, float | None]: ...
+
+
 class FundamentalAnalysisService:
     """ドメイン層ユースケース: 分析出力の組み立て実行を担当。"""
 
-    def __init__(self, api_key: str, file_cache: FileCache | None = None):
-        self.client = JQuantsClient(api_key)
+    def __init__(
+        self,
+        api_key: str,
+        file_cache: FileCache | None = None,
+        client: JQuantsClientPort | None = None,
+        fetch_market_snapshot: MarketDataProviderPort | None = None,
+    ):
+        self.client = client or JQuantsClient(api_key)
         self.cache = file_cache or FileCache()
+        self.fetch_market_snapshot = fetch_market_snapshot or fetch_yfinance_snapshot
 
     def fetch_master(self, code4: str) -> dict[str, Any] | None:
         code5 = normalize_code(code4)
@@ -42,7 +58,7 @@ class FundamentalAnalysisService:
         snapshot = self.cache.get_or_fetch(
             f"yf_{code4}",
             CACHE_TTL_YF_SEC,
-            lambda: fetch_yfinance_snapshot(code4),
+            lambda: self.fetch_market_snapshot(code4),
         )
         if not isinstance(snapshot, dict):
             return {"price": None, "market_cap": None}

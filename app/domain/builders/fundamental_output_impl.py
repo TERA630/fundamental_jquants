@@ -63,6 +63,10 @@ class _Record:
     disclosed_at: str = ""
 
 
+def _build_non_empty_count(row: dict[str, Any], keys: list[str]) -> int:
+    return sum(1 for key in keys if row.get(key) not in (None, ""))
+
+
 def _build_merged_period_row(preferred_row: dict[str, Any], supplement_row: dict[str, Any]) -> dict[str, Any]:
     """preferred_rowを優先し、空値のみsupplement_rowで補完する。"""
     merged = dict(supplement_row)
@@ -86,6 +90,7 @@ def _build_merged_period_record(preferred: _Record, supplement: _Record) -> _Rec
 
 def _build_periods(summary_rows: list[dict[str, Any]]):
     periods_by_year: dict[int, dict[str, _Record]] = {}
+    records_by_fy_end: dict[str, list[_Record]] = {}
     for row in summary_rows:
         ptype = str(_first_present(row, ["CurPerType", "TypeOfCurrentPeriod", "CurrentPeriod", "PeriodType", "ToCP", "Tocp"]) or "").upper()
         if "1Q" in ptype or "Q1" in ptype:
@@ -103,6 +108,8 @@ def _build_periods(summary_rows: list[dict[str, Any]]):
         if year is None:
             continue
         rec = _Record(year, pt, row, cur_st, str(_first_present(row,["CurPerEn","CurrentPeriodEndDate","CurrentFiscalYearEndDate"]) or ""), str(_first_present(row,["DisclosedDate","Date"]) or ""))
+        if rec.cur_per_en:
+            records_by_fy_end.setdefault(rec.cur_per_en, []).append(rec)
         year_map = periods_by_year.setdefault(rec.fiscal_year, {})
         old = year_map.get(rec.period_type)
         if old is None:
@@ -129,7 +136,33 @@ def _build_periods(summary_rows: list[dict[str, Any]]):
                 break
         if latest_q is not None:
             break
-    return type("Periods", (), {"latest_fy": latest_fy, "prev_fy": prev_fy, "latest_quarter": latest_q})
+    current_forecast = None
+    next_forecast = None
+    if latest_fy is not None and latest_fy.cur_per_en in records_by_fy_end:
+        candidate_rows = sorted(records_by_fy_end[latest_fy.cur_per_en], key=lambda x: x.disclosed_at, reverse=True)
+        current_forecast = candidate_rows[0]
+        for rec in candidate_rows[1:]:
+            current_forecast = _build_merged_period_record(current_forecast, rec)
+
+        next_forecast = max(
+            candidate_rows,
+            key=lambda rec: (
+                _build_non_empty_count(rec.row, ["NxFSales", "NxFsales", "NxFOP", "NxFOdP", "NxFODP", "NxFNP", "NxFEPS"]),
+                rec.disclosed_at,
+            ),
+        )
+
+    return type(
+        "Periods",
+        (),
+        {
+            "latest_fy": latest_fy,
+            "prev_fy": prev_fy,
+            "latest_quarter": latest_q,
+            "current_forecast": current_forecast,
+            "next_forecast": next_forecast,
+        },
+    )
 
 
 def build_fundamental_output_text_impl(*, name: str, code4: str, master: dict[str, Any] | None, summary_rows: list[dict[str, Any]], price: float | None, market_cap: float | None) -> str:

@@ -8,6 +8,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox
 
+from app.data.api_key_provider import fetch_api_key_fallback
 from app.gui_controller import FundamentalGuiController
 from app.gui_state import GuiState, build_default_output_filename, build_stock_choices, get_selected_stock
 from app.gui_view import FundamentalView
@@ -93,8 +94,16 @@ class FundamentalApp:
         api_key = self.api_key_var.get().strip()
         if api_key:
             return api_key
+        fallback_api_key = self._fetch_api_key_fallback()
+        if fallback_api_key:
+            self.api_key_var.set(fallback_api_key)
+            return fallback_api_key
         messagebox.showerror("APIキー未入力", "J-Quants APIキーを入力してください。")
         return None
+
+    @staticmethod
+    def _fetch_api_key_fallback() -> str:
+        return fetch_api_key_fallback()
 
     def _render_output(self, output: str, status: str):
         self.view.render_output(output)

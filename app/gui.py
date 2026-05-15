@@ -90,11 +90,11 @@ class FundamentalApp:
         return selected
 
     def _require_api_key(self) -> str | None:
-        try:
-            return self.controller.fetch_api_key(self.api_key_var.get())
-        except ValueError as exc:
-            messagebox.showerror("APIキー未設定", str(exc))
-            return None
+        api_key = self.controller.fetch_api_key(self.api_key_var.get())
+        if api_key:
+            return api_key
+        messagebox.showerror("APIキー未入力", "J-Quants APIキーを入力してください。")
+        return None
 
     def _render_output(self, output: str, status: str):
         self.view.render_output(output)

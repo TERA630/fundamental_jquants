@@ -18,6 +18,10 @@ class FundamentalGuiController:
     def fetch_watchlist_entries(self, path: Path) -> list[tuple[str, str]]:
         return fetch_watchlist(path)
 
+    def fetch_api_key(self, raw_api_key: str) -> str | None:
+        normalized_api_key = raw_api_key.strip()
+        return normalized_api_key or None
+
     def fetch_analysis_output(self, *, api_key: str, name: str, code4: str, output_cache: dict[str, str]) -> str:
         cached_output = output_cache.get(code4)
         if cached_output is not None:

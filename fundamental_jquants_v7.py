@@ -36,6 +36,7 @@ from datetime import datetime, date
 from pathlib import Path
 from typing import Any, Callable
 
+from app.data.api_key_provider import fetch_api_key_fallback
 from app.services import calc_metrics as service_calc_metrics, calc_yoy as service_calc_yoy, grade_summary as service_grade_summary, progress_rank as service_progress_rank, rank_forecast_yoy as service_rank_forecast_yoy, rank_next_yoy as service_rank_next_yoy, rank_symbol as service_rank_symbol
 
 import requests
@@ -1477,48 +1478,7 @@ class FundamentalApp:
 
     @staticmethod
     def _fetch_api_key_fallback() -> str:
-        def parse_api_key_text(text: str) -> str:
-            raw = text.strip()
-            if not raw:
-                return ""
-            if "=" in raw:
-                for line in raw.splitlines():
-                    line = line.strip()
-                    if not line or line.startswith("#") or "=" not in line:
-                        continue
-                    key, value = line.split("=", 1)
-                    if key.strip() in {"JQUANTS_API_KEY", "JQUANTS_KEY", "GITHUB_JQUANTS_API_KEY"}:
-                        return value.strip().strip('"').strip("'")
-            return raw
-
-        env_candidates = [
-            os.environ.get("JQUANTS_API_KEY", ""),
-            os.environ.get("JQUANTS_KEY", ""),
-            os.environ.get("GITHUB_JQUANTS_API_KEY", ""),
-        ]
-        for value in env_candidates:
-            api_key = str(value).strip()
-            if api_key:
-                return api_key
-
-        file_candidates = [
-            Path.cwd() / "jquants_key.env",
-            Path.cwd() / "jquants_key",
-            Path.cwd() / "jquants_key.txt",
-            Path.cwd() / ".jquants_key",
-            Path.home() / "jquants_key.env",
-            Path.home() / "jquants_key",
-            Path.home() / "jquants_key.txt",
-            Path.home() / ".jquants_key",
-        ]
-        for path in file_candidates:
-            try:
-                api_key = parse_api_key_text(path.read_text(encoding="utf-8"))
-            except OSError:
-                continue
-            if api_key:
-                return api_key
-        return ""
+        return fetch_api_key_fallback()
 
     def _render_output(self, output: str, status: str):
         self.text.delete("1.0", tk.END)

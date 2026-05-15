@@ -63,9 +63,29 @@ class _Record:
     disclosed_at: str = ""
 
 
+def _build_merged_period_row(preferred_row: dict[str, Any], supplement_row: dict[str, Any]) -> dict[str, Any]:
+    """preferred_rowを優先し、空値のみsupplement_rowで補完する。"""
+    merged = dict(supplement_row)
+    for key, value in preferred_row.items():
+        if value not in (None, ""):
+            merged[key] = value
+    return merged
+
+
+def _build_merged_period_record(preferred: _Record, supplement: _Record) -> _Record:
+    """開示優先レコードを維持しつつ、空値は同年度同期間の別レコードで補完する。"""
+    return _Record(
+        fiscal_year=preferred.fiscal_year,
+        period_type=preferred.period_type,
+        row=_build_merged_period_row(preferred.row, supplement.row),
+        cur_per_st=preferred.cur_per_st or supplement.cur_per_st,
+        cur_per_en=preferred.cur_per_en or supplement.cur_per_en,
+        disclosed_at=preferred.disclosed_at or supplement.disclosed_at,
+    )
+
+
 def _build_periods(summary_rows: list[dict[str, Any]]):
-    fy: list[_Record] = []
-    q: list[_Record] = []
+    periods_by_year: dict[int, dict[str, _Record]] = {}
     for row in summary_rows:
         ptype = str(_first_present(row, ["CurPerType", "TypeOfCurrentPeriod", "CurrentPeriod", "PeriodType", "ToCP", "Tocp"]) or "").upper()
         if "1Q" in ptype or "Q1" in ptype:
@@ -83,12 +103,32 @@ def _build_periods(summary_rows: list[dict[str, Any]]):
         if year is None:
             continue
         rec = _Record(year, pt, row, cur_st, str(_first_present(row,["CurPerEn","CurrentPeriodEndDate","CurrentFiscalYearEndDate"]) or ""), str(_first_present(row,["DisclosedDate","Date"]) or ""))
-        (fy if pt == "FY" else q).append(rec)
-    fy = sorted(fy, key=lambda x: x.fiscal_year, reverse=True)
-    latest_fy = fy[0] if fy else None
-    prev_fy = fy[1] if len(fy) >= 2 else None
-    q = sorted(q, key=lambda x: (x.fiscal_year, {"1Q":1,"2Q":2,"3Q":3}[x.period_type]), reverse=True)
-    latest_q = q[0] if q else None
+        year_map = periods_by_year.setdefault(rec.fiscal_year, {})
+        old = year_map.get(rec.period_type)
+        if old is None:
+            year_map[rec.period_type] = rec
+        elif rec.disclosed_at >= old.disclosed_at:
+            year_map[rec.period_type] = _build_merged_period_record(rec, old)
+        else:
+            year_map[rec.period_type] = _build_merged_period_record(old, rec)
+
+    fy_years = sorted((y for y, per in periods_by_year.items() if "FY" in per), reverse=True)
+    latest_fy = periods_by_year[fy_years[0]]["FY"] if fy_years else None
+    prev_fy = None
+    if latest_fy is not None:
+        prev_fy = periods_by_year.get(latest_fy.fiscal_year - 1, {}).get("FY")
+        if prev_fy is None and len(fy_years) >= 2:
+            prev_fy = periods_by_year[fy_years[1]]["FY"]
+
+    latest_q = None
+    for year in sorted(periods_by_year.keys(), reverse=True):
+        for ptype in ("3Q", "2Q", "1Q"):
+            rec = periods_by_year[year].get(ptype)
+            if rec is not None:
+                latest_q = rec
+                break
+        if latest_q is not None:
+            break
     return type("Periods", (), {"latest_fy": latest_fy, "prev_fy": prev_fy, "latest_quarter": latest_q})
 
 

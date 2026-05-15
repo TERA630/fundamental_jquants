@@ -90,7 +90,7 @@ class FundamentalApp:
         return selected
 
     def _require_api_key(self) -> str | None:
-        api_key = self.api_key_var.get().strip()
+        api_key = self.controller.fetch_api_key(self.api_key_var.get())
         if api_key:
             return api_key
         fallback_api_key = self._fetch_api_key_fallback()
@@ -128,9 +128,6 @@ class FundamentalApp:
 
         file_candidates = [
             Path.cwd() / "jquants_key.env",
-            Path.cwd() / "jquants_key",
-            Path.cwd() / "jquants_key.txt",
-            Path.cwd() / ".jquants_key",
             Path.home() / "jquants_key.env",
             Path.home() / "jquants_key",
             Path.home() / "jquants_key.txt",

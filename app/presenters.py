@@ -5,14 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import fundamental_jquants_v7 as legacy
+from app.data.watchlist_repository import fetch_watchlist_entries
+from app.domain.builders.fundamental_output import build_fundamental_output_text
 
 from app.domain.builders.fundamental_output import build_fundamental_output_text
 
 
 def fetch_watchlist(path: Path) -> list[tuple[str, str]]:
     """監視銘柄ファイルを読み込み、GUI用の銘柄一覧へ整形して返す。"""
-    return legacy.load_watchlist(path)
+    return fetch_watchlist_entries(path)
 
 
 def build_fundamental_output(

@@ -1503,13 +1503,9 @@ class FundamentalApp:
 
         file_candidates = [
             Path.cwd() / "jquants_key.env",
-            Path.cwd() / "jquants_key",
-            Path.cwd() / "jquants_key.txt",
-            Path.cwd() / ".jquants_key",
+            Path.cwd() / "jquants_key",　
             Path.home() / "jquants_key.env",
             Path.home() / "jquants_key",
-            Path.home() / "jquants_key.txt",
-            Path.home() / ".jquants_key",
         ]
         for path in file_candidates:
             try:

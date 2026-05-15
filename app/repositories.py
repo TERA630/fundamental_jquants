@@ -8,6 +8,7 @@ from app.data.utils import normalize_code
 maybe_yfinance_price = get_yfinance_price
 
 __all__ = [
+    "fetch_jquants_api_key",
     "FileCache",
     "JQuantsClient",
     "fetch_yfinance_snapshot",

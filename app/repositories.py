@@ -1,6 +1,5 @@
 """Compatibility facade for data layer modules."""
 
-from app.data.api_key_resolver import fetch_jquants_api_key
 from app.data.file_cache import FileCache
 from app.data.jquants_client import JQuantsClient
 from app.data.market_data_provider import fetch_yfinance_snapshot, get_yfinance_price

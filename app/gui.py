@@ -93,8 +93,41 @@ class FundamentalApp:
         api_key = self.api_key_var.get().strip()
         if api_key:
             return api_key
+        fallback_api_key = self._fetch_api_key_fallback()
+        if fallback_api_key:
+            self.api_key_var.set(fallback_api_key)
+            return fallback_api_key
         messagebox.showerror("APIキー未入力", "J-Quants APIキーを入力してください。")
         return None
+
+    @staticmethod
+    def _fetch_api_key_fallback() -> str:
+        env_candidates = [
+            os.environ.get("JQUANTS_API_KEY", ""),
+            os.environ.get("JQUANTS_KEY", ""),
+            os.environ.get("GITHUB_JQUANTS_API_KEY", ""),
+        ]
+        for value in env_candidates:
+            api_key = str(value).strip()
+            if api_key:
+                return api_key
+
+        file_candidates = [
+            Path.cwd() / "jquants_key",
+            Path.cwd() / "jquants_key.txt",
+            Path.cwd() / ".jquants_key",
+            Path.home() / "jquants_key",
+            Path.home() / "jquants_key.txt",
+            Path.home() / ".jquants_key",
+        ]
+        for path in file_candidates:
+            try:
+                api_key = path.read_text(encoding="utf-8").strip()
+            except OSError:
+                continue
+            if api_key:
+                return api_key
+        return ""
 
     def _render_output(self, output: str, status: str):
         self.view.render_output(output)

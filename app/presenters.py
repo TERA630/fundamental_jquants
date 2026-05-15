@@ -8,6 +8,8 @@ from typing import Any
 from app.data.watchlist_repository import fetch_watchlist_entries
 from app.domain.builders.fundamental_output import build_fundamental_output_text
 
+from app.domain.builders.fundamental_output import build_fundamental_output_text
+
 
 def fetch_watchlist(path: Path) -> list[tuple[str, str]]:
     """監視銘柄ファイルを読み込み、GUI用の銘柄一覧へ整形して返す。"""

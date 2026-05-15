@@ -598,6 +598,28 @@ def period_record_from_row(row: dict[str, Any]) -> PeriodRecord | None:
     )
 
 
+def build_merged_period_row(preferred_row: dict[str, Any], supplement_row: dict[str, Any]) -> dict[str, Any]:
+    """preferred_rowを優先し、空値のみsupplement_rowで補完する。"""
+    merged = dict(supplement_row)
+    for key, value in preferred_row.items():
+        if value not in (None, ""):
+            merged[key] = value
+    return merged
+
+
+def build_merged_period_record(preferred: PeriodRecord, supplement: PeriodRecord) -> PeriodRecord:
+    """開示優先レコードを維持しつつ、空値は同年度同期間の別レコードで補完する。"""
+    return PeriodRecord(
+        code=preferred.code or supplement.code,
+        fiscal_year=preferred.fiscal_year,
+        period_type=preferred.period_type,
+        cur_per_st=preferred.cur_per_st or supplement.cur_per_st,
+        cur_per_en=preferred.cur_per_en or supplement.cur_per_en,
+        disclosed_at=preferred.disclosed_at or supplement.disclosed_at,
+        row=build_merged_period_row(preferred.row, supplement.row),
+    )
+
+
 def build_period_index(summary_rows: list[dict[str, Any]]) -> FinancialPeriods:
     """summaryレスポンスを年度×1Q/2Q/3Q/FYに整理する。同年度・同期間の重複は開示日時が新しい行を採用。"""
     periods_by_year: dict[int, dict[str, PeriodRecord]] = {}
@@ -609,8 +631,12 @@ def build_period_index(summary_rows: list[dict[str, Any]]) -> FinancialPeriods:
             continue
         year_map = periods_by_year.setdefault(rec.fiscal_year, {})
         old = year_map.get(rec.period_type)
-        if old is None or rec.disclosed_at >= old.disclosed_at:
+        if old is None:
             year_map[rec.period_type] = rec
+        elif rec.disclosed_at >= old.disclosed_at:
+            year_map[rec.period_type] = build_merged_period_record(rec, old)
+        else:
+            year_map[rec.period_type] = build_merged_period_record(old, rec)
         if latest_any is None or rec.disclosed_at >= latest_any.disclosed_at:
             latest_any = rec
 
@@ -1231,6 +1257,8 @@ def build_output(name: str, code4: str, master: dict[str, Any] | None, summary_r
         "■来季予想",
         f"売上予想：{fmt_money(metrics.get('next_sales'))}（今期比 {fmt_pct(metrics.get('next_sales_yoy'))}） → {service_rank_next_yoy(metrics.get('next_sales_yoy'))}",
         f"営業利益予想：{fmt_money(metrics.get('next_op'))}（今期比 {fmt_pct(metrics.get('next_op_yoy'))}） → {service_rank_next_yoy(metrics.get('next_op_yoy'))}",
+        f"経常利益予想：{fmt_money(metrics.get('next_ordinary'))}（今期比 {fmt_pct(metrics.get('next_ordinary_yoy'))}）",
+        f"当期純利益予想：{fmt_money(metrics.get('next_np'))}（今期比 {fmt_pct(metrics.get('next_np_yoy'))}）",
         f"EPS予想：{fmt_num(metrics.get('next_eps'))}円（今期比 {fmt_pct(metrics.get('next_eps_yoy'))}）",
         "",
         "■ キャッシュフロー",
@@ -1440,8 +1468,57 @@ class FundamentalApp:
         api_key = self.api_key_var.get().strip()
         if api_key:
             return api_key
+        fallback_api_key = self._fetch_api_key_fallback()
+        if fallback_api_key:
+            self.api_key_var.set(fallback_api_key)
+            return fallback_api_key
         messagebox.showerror("APIキー未入力", "J-Quants APIキーを入力してください。")
         return None
+
+    @staticmethod
+    def _fetch_api_key_fallback() -> str:
+        def parse_api_key_text(text: str) -> str:
+            raw = text.strip()
+            if not raw:
+                return ""
+            if "=" in raw:
+                for line in raw.splitlines():
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, value = line.split("=", 1)
+                    if key.strip() in {"JQUANTS_API_KEY", "JQUANTS_KEY", "GITHUB_JQUANTS_API_KEY"}:
+                        return value.strip().strip('"').strip("'")
+            return raw
+
+        env_candidates = [
+            os.environ.get("JQUANTS_API_KEY", ""),
+            os.environ.get("JQUANTS_KEY", ""),
+            os.environ.get("GITHUB_JQUANTS_API_KEY", ""),
+        ]
+        for value in env_candidates:
+            api_key = str(value).strip()
+            if api_key:
+                return api_key
+
+        file_candidates = [
+            Path.cwd() / "jquants_key.env",
+            Path.cwd() / "jquants_key",
+            Path.cwd() / "jquants_key.txt",
+            Path.cwd() / ".jquants_key",
+            Path.home() / "jquants_key.env",
+            Path.home() / "jquants_key",
+            Path.home() / "jquants_key.txt",
+            Path.home() / ".jquants_key",
+        ]
+        for path in file_candidates:
+            try:
+                api_key = parse_api_key_text(path.read_text(encoding="utf-8"))
+            except OSError:
+                continue
+            if api_key:
+                return api_key
+        return ""
 
     def _render_output(self, output: str, status: str):
         self.text.delete("1.0", tk.END)

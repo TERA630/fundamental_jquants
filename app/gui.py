@@ -93,8 +93,57 @@ class FundamentalApp:
         api_key = self.api_key_var.get().strip()
         if api_key:
             return api_key
+        fallback_api_key = self._fetch_api_key_fallback()
+        if fallback_api_key:
+            self.api_key_var.set(fallback_api_key)
+            return fallback_api_key
         messagebox.showerror("APIキー未入力", "J-Quants APIキーを入力してください。")
         return None
+
+    @staticmethod
+    def _fetch_api_key_fallback() -> str:
+        def parse_api_key_text(text: str) -> str:
+            raw = text.strip()
+            if not raw:
+                return ""
+            if "=" in raw:
+                for line in raw.splitlines():
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, value = line.split("=", 1)
+                    if key.strip() in {"JQUANTS_API_KEY", "JQUANTS_KEY", "GITHUB_JQUANTS_API_KEY"}:
+                        return value.strip().strip('"').strip("'")
+            return raw
+
+        env_candidates = [
+            os.environ.get("JQUANTS_API_KEY", ""),
+            os.environ.get("JQUANTS_KEY", ""),
+            os.environ.get("GITHUB_JQUANTS_API_KEY", ""),
+        ]
+        for value in env_candidates:
+            api_key = str(value).strip()
+            if api_key:
+                return api_key
+
+        file_candidates = [
+            Path.cwd() / "jquants_key.env",
+            Path.cwd() / "jquants_key",
+            Path.cwd() / "jquants_key.txt",
+            Path.cwd() / ".jquants_key",
+            Path.home() / "jquants_key.env",
+            Path.home() / "jquants_key",
+            Path.home() / "jquants_key.txt",
+            Path.home() / ".jquants_key",
+        ]
+        for path in file_candidates:
+            try:
+                api_key = parse_api_key_text(path.read_text(encoding="utf-8"))
+            except OSError:
+                continue
+            if api_key:
+                return api_key
+        return ""
 
     def _render_output(self, output: str, status: str):
         self.view.render_output(output)

@@ -33,6 +33,27 @@ class TestMetricsForecastKeys(unittest.TestCase):
         self.assertEqual(metrics.get('next_eps'), 65.0)
         self.assertEqual(metrics.get('prev_op_margin'), 10.0)
 
+    def test_forecast_falls_back_to_current_forecast_when_latest_quarter_is_blank(self):
+        latest_fy = _Rec({
+            'Sales': '1000', 'OP': '100', 'OdP': '90', 'NP': '60', 'EPS': '50', 'BPS': '500',
+            'FSales': '', 'FOP': ''
+        }, 2024)
+        prev_fy = _Rec({'Sales': '900', 'OP': '90', 'OdP': '80', 'NP': '55', 'EPS': '45', 'BPS': '450'}, 2023)
+        latest_quarter = _Rec({'FSales': '', 'FOP': ''}, 2024, '3Q')
+        current_forecast = _Rec({'FSales': '1300', 'FOP': '140', 'FNP': '95', 'FEPS': '70'}, 2024, 'FY')
+        periods = SimpleNamespace(
+            latest_fy=latest_fy,
+            prev_fy=prev_fy,
+            latest_quarter=latest_quarter,
+            current_forecast=current_forecast,
+            next_forecast=None,
+        )
+
+        metrics = calc_metrics(periods, price=1000)
+
+        self.assertEqual(metrics.get('forecast_sales'), 1300.0)
+        self.assertEqual(metrics.get('forecast_op'), 140.0)
+
 
 if __name__ == '__main__':
     unittest.main()

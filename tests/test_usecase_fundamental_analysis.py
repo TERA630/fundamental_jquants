@@ -47,6 +47,12 @@ class InMemoryCache:
     def __init__(self):
         self.store = {}
 
+    def get(self, key, _ttl):
+        return self.store.get(key)
+
+    def set(self, key, value):
+        self.store[key] = value
+
     def get_or_fetch(self, key, _ttl, fetcher):
         if key in self.store:
             return self.store[key]
@@ -104,6 +110,33 @@ class TestFundamentalAnalysisService(unittest.TestCase):
         self.assertEqual(client.master_calls, 1)
         self.assertEqual(client.summary_calls, 1)
         self.assertEqual(market.calls, 1)
+
+    def test_price_none_is_not_cached(self):
+        client = FakeClient()
+        cache = InMemoryCache()
+
+        class EmptyPriceProvider:
+            def __init__(self):
+                self.calls = 0
+
+            def __call__(self, _code4):
+                self.calls += 1
+                return {"price": None, "market_cap": None}
+
+        market = EmptyPriceProvider()
+        service = FundamentalAnalysisService(
+            api_key="dummy",
+            file_cache=cache,
+            client=client,
+            fetch_market_snapshot=market,
+        )
+
+        snap1 = service.fetch_price_snapshot("5803")
+        snap2 = service.fetch_price_snapshot("5803")
+
+        self.assertEqual(snap1, {"price": None, "market_cap": None})
+        self.assertEqual(snap2, {"price": None, "market_cap": None})
+        self.assertEqual(market.calls, 2)
 
 
 if __name__ == "__main__":

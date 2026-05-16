@@ -91,6 +91,7 @@ def _build_merged_period_record(preferred: _Record, supplement: _Record) -> _Rec
 def _build_periods(summary_rows: list[dict[str, Any]]):
     periods_by_year: dict[int, dict[str, _Record]] = {}
     records_by_fy_end: dict[str, list[_Record]] = {}
+    latest_any = None
     for row in summary_rows:
         ptype = str(_first_present(row, ["CurPerType", "TypeOfCurrentPeriod", "CurrentPeriod", "PeriodType", "ToCP", "Tocp"]) or "").upper()
         if "1Q" in ptype or "Q1" in ptype:
@@ -110,6 +111,8 @@ def _build_periods(summary_rows: list[dict[str, Any]]):
         rec = _Record(year, pt, row, cur_st, str(_first_present(row,["CurPerEn","CurrentPeriodEndDate","CurrentFiscalYearEndDate"]) or ""), str(_first_present(row,["DisclosedDate","Date"]) or ""))
         if rec.cur_per_en:
             records_by_fy_end.setdefault(rec.cur_per_en, []).append(rec)
+        if latest_any is None or rec.disclosed_at >= latest_any.disclosed_at:
+            latest_any = rec
         year_map = periods_by_year.setdefault(rec.fiscal_year, {})
         old = year_map.get(rec.period_type)
         if old is None:
@@ -138,8 +141,13 @@ def _build_periods(summary_rows: list[dict[str, Any]]):
             break
     current_forecast = None
     next_forecast = None
-    if latest_fy is not None and latest_fy.cur_per_en in records_by_fy_end:
-        candidate_rows = sorted(records_by_fy_end[latest_fy.cur_per_en], key=lambda x: x.disclosed_at, reverse=True)
+    forecast_anchor_fy_end = ""
+    if latest_any is not None and latest_any.cur_per_en:
+        forecast_anchor_fy_end = latest_any.cur_per_en
+    elif latest_fy is not None and latest_fy.cur_per_en:
+        forecast_anchor_fy_end = latest_fy.cur_per_en
+    if forecast_anchor_fy_end and forecast_anchor_fy_end in records_by_fy_end:
+        candidate_rows = sorted(records_by_fy_end[forecast_anchor_fy_end], key=lambda x: x.disclosed_at, reverse=True)
         current_forecast = candidate_rows[0]
         for rec in candidate_rows[1:]:
             current_forecast = _build_merged_period_record(current_forecast, rec)

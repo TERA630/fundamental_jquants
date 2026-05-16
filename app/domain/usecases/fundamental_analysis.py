@@ -55,11 +55,23 @@ class FundamentalAnalysisService:
         return rows if isinstance(rows, list) else []
 
     def fetch_price_snapshot(self, code4: str) -> dict[str, float | None]:
-        snapshot = self.cache.get_or_fetch(
-            f"yf_{code4}",
-            CACHE_TTL_YF_SEC,
-            lambda: self.fetch_market_snapshot(code4),
-        )
+        cache_key = f"yf_{code4}"
+        if hasattr(self.cache, "get") and hasattr(self.cache, "set"):
+            cached = self.cache.get(cache_key, CACHE_TTL_YF_SEC)
+            if cached is not None and isinstance(cached, dict):
+                return {
+                    "price": cached.get("price"),
+                    "market_cap": cached.get("market_cap"),
+                }
+            snapshot = self.fetch_market_snapshot(code4)
+            if isinstance(snapshot, dict) and snapshot.get("price") is not None:
+                self.cache.set(cache_key, snapshot)
+        else:
+            snapshot = self.cache.get_or_fetch(
+                cache_key,
+                CACHE_TTL_YF_SEC,
+                lambda: self.fetch_market_snapshot(code4),
+            )
         if not isinstance(snapshot, dict):
             return {"price": None, "market_cap": None}
         return {

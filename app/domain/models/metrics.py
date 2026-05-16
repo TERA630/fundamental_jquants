@@ -67,6 +67,20 @@ def calc_metrics(periods: Any, price: float | None) -> dict[str, float | str | N
                 return safe_float(long_value)
         return None
 
+    def get_forecast_value(short_keys: list[str], long_keys: list[str] | None = None) -> float | None:
+        for source in (latest_quarter, current_forecast, latest_fy):
+            value = get_value(source, short_keys, long_keys)
+            if value is not None:
+                return value
+        return None
+
+    def get_next_forecast_value(short_keys: list[str], long_keys: list[str] | None = None) -> float | None:
+        for source in (next_forecast, current_forecast, latest_fy):
+            value = get_value(source, short_keys, long_keys)
+            if value is not None:
+                return value
+        return None
+
     latest_fy_rec = periods.latest_fy
     prev_fy_rec = periods.prev_fy
     latest_quarter_rec = periods.latest_quarter
@@ -117,18 +131,22 @@ def calc_metrics(periods: Any, price: float | None) -> dict[str, float | str | N
     growth_for_peg = yoy_sales
     peg = None if per is None or growth_for_peg in (None, 0) or growth_for_peg is None or growth_for_peg <= 0 else per / growth_for_peg
 
-    forecast_source = latest_quarter or latest_fy
-    next_source = latest_fy
-    forecast_sales = get_value(forecast_source, ["FSales", "Fsales"], ["ForecastSales"])
-    forecast_op = get_value(forecast_source, ["FOP"], ["ForecastOperatingProfit"])
-    forecast_ordinary = get_value(forecast_source, ["FOdP", "FODP"], ["ForecastOrdinaryProfit"])
-    forecast_np = get_value(forecast_source, ["FNP"], ["ForecastProfit", "ForecastNetIncome"])
-    forecast_eps = get_value(forecast_source, ["FEPS"], ["ForecastEarningsPerShare"])
-    next_sales = get_value(next_source, ["NxFSales", "NxFsales"], ["NextFiscalYearForecastSales"])
-    next_op = get_value(next_source, ["NxFOP"], ["NextFiscalYearForecastOperatingProfit"])
-    next_ordinary = get_value(next_source, ["NxFOdP", "NxFODP"], ["NextFiscalYearForecastOrdinaryProfit"])
-    next_np = get_value(next_source, ["NxFNP"], ["NextFiscalYearForecastProfit", "NextFiscalYearForecastNetIncome"])
-    next_eps = get_value(next_source, ["NxFEPS"], ["NextFiscalYearForecastEarningsPerShare"])
+    current_forecast_rec = getattr(periods, "current_forecast", None)
+    next_forecast_rec = getattr(periods, "next_forecast", None)
+    current_forecast = row_from_record(current_forecast_rec)
+    next_forecast = row_from_record(next_forecast_rec)
+
+    forecast_source = latest_quarter or current_forecast or latest_fy
+    forecast_sales = get_forecast_value(["FSales", "Fsales"], ["ForecastSales"])
+    forecast_op = get_forecast_value(["FOP"], ["ForecastOperatingProfit"])
+    forecast_ordinary = get_forecast_value(["FOdP", "FODP"], ["ForecastOrdinaryProfit"])
+    forecast_np = get_forecast_value(["FNP"], ["ForecastProfit", "ForecastNetIncome"])
+    forecast_eps = get_forecast_value(["FEPS"], ["ForecastEarningsPerShare"])
+    next_sales = get_next_forecast_value(["NxFSales", "NxFsales"], ["NextFiscalYearForecastSales"])
+    next_op = get_next_forecast_value(["NxFOP"], ["NextFiscalYearForecastOperatingProfit"])
+    next_ordinary = get_next_forecast_value(["NxFOdP", "NxFODP"], ["NextFiscalYearForecastOrdinaryProfit"])
+    next_np = get_next_forecast_value(["NxFNP"], ["NextFiscalYearForecastProfit", "NextFiscalYearForecastNetIncome"])
+    next_eps = get_next_forecast_value(["NxFEPS"], ["NextFiscalYearForecastEarningsPerShare"])
 
     forecast_sales_yoy = calc_yoy(forecast_sales, sales)
     forecast_op_yoy = calc_yoy(forecast_op, op)
@@ -161,7 +179,7 @@ def calc_metrics(periods: Any, price: float | None) -> dict[str, float | str | N
         "sales_progress": sales_progress, "op_progress": op_progress, "progress_label": progress_label,
         "progress_base": progress_base, "latest_fy_label": format_period_record(latest_fy_rec),
         "prev_fy_label": format_period_record(prev_fy_rec), "latest_quarter_label": format_period_record(latest_quarter_rec),
-        "forecast_source_label": format_period_record(latest_quarter_rec or latest_fy_rec),
+        "forecast_source_label": format_period_record(latest_quarter_rec or current_forecast_rec or latest_fy_rec),
     }
 
 __all__ = ["calc_yoy", "calc_metrics"]

@@ -63,9 +63,35 @@ class _Record:
     disclosed_at: str = ""
 
 
+def _build_non_empty_count(row: dict[str, Any], keys: list[str]) -> int:
+    return sum(1 for key in keys if row.get(key) not in (None, ""))
+
+
+def _build_merged_period_row(preferred_row: dict[str, Any], supplement_row: dict[str, Any]) -> dict[str, Any]:
+    """preferred_rowを優先し、空値のみsupplement_rowで補完する。"""
+    merged = dict(supplement_row)
+    for key, value in preferred_row.items():
+        if value not in (None, ""):
+            merged[key] = value
+    return merged
+
+
+def _build_merged_period_record(preferred: _Record, supplement: _Record) -> _Record:
+    """開示優先レコードを維持しつつ、空値は同年度同期間の別レコードで補完する。"""
+    return _Record(
+        fiscal_year=preferred.fiscal_year,
+        period_type=preferred.period_type,
+        row=_build_merged_period_row(preferred.row, supplement.row),
+        cur_per_st=preferred.cur_per_st or supplement.cur_per_st,
+        cur_per_en=preferred.cur_per_en or supplement.cur_per_en,
+        disclosed_at=preferred.disclosed_at or supplement.disclosed_at,
+    )
+
+
 def _build_periods(summary_rows: list[dict[str, Any]]):
-    fy: list[_Record] = []
-    q: list[_Record] = []
+    periods_by_year: dict[int, dict[str, _Record]] = {}
+    records_by_fy_end: dict[str, list[_Record]] = {}
+    latest_any = None
     for row in summary_rows:
         ptype = str(_first_present(row, ["CurPerType", "TypeOfCurrentPeriod", "CurrentPeriod", "PeriodType", "ToCP", "Tocp"]) or "").upper()
         if "1Q" in ptype or "Q1" in ptype:
@@ -83,13 +109,70 @@ def _build_periods(summary_rows: list[dict[str, Any]]):
         if year is None:
             continue
         rec = _Record(year, pt, row, cur_st, str(_first_present(row,["CurPerEn","CurrentPeriodEndDate","CurrentFiscalYearEndDate"]) or ""), str(_first_present(row,["DisclosedDate","Date"]) or ""))
-        (fy if pt == "FY" else q).append(rec)
-    fy = sorted(fy, key=lambda x: x.fiscal_year, reverse=True)
-    latest_fy = fy[0] if fy else None
-    prev_fy = fy[1] if len(fy) >= 2 else None
-    q = sorted(q, key=lambda x: (x.fiscal_year, {"1Q":1,"2Q":2,"3Q":3}[x.period_type]), reverse=True)
-    latest_q = q[0] if q else None
-    return type("Periods", (), {"latest_fy": latest_fy, "prev_fy": prev_fy, "latest_quarter": latest_q})
+        if rec.cur_per_en:
+            records_by_fy_end.setdefault(rec.cur_per_en, []).append(rec)
+        if latest_any is None or rec.disclosed_at >= latest_any.disclosed_at:
+            latest_any = rec
+        year_map = periods_by_year.setdefault(rec.fiscal_year, {})
+        old = year_map.get(rec.period_type)
+        if old is None:
+            year_map[rec.period_type] = rec
+        elif rec.disclosed_at >= old.disclosed_at:
+            year_map[rec.period_type] = _build_merged_period_record(rec, old)
+        else:
+            year_map[rec.period_type] = _build_merged_period_record(old, rec)
+
+    fy_years = sorted((y for y, per in periods_by_year.items() if "FY" in per), reverse=True)
+    latest_fy = periods_by_year[fy_years[0]]["FY"] if fy_years else None
+    prev_fy = None
+    if latest_fy is not None:
+        prev_fy = periods_by_year.get(latest_fy.fiscal_year - 1, {}).get("FY")
+        if prev_fy is None and len(fy_years) >= 2:
+            prev_fy = periods_by_year[fy_years[1]]["FY"]
+
+    latest_q = None
+    for year in sorted(periods_by_year.keys(), reverse=True):
+        for ptype in ("3Q", "2Q", "1Q"):
+            rec = periods_by_year[year].get(ptype)
+            if rec is not None:
+                latest_q = rec
+                break
+        if latest_q is not None:
+            break
+    current_forecast = None
+    next_forecast = None
+    forecast_anchor_fy_end = ""
+    if latest_q is not None and latest_q.cur_per_en:
+        forecast_anchor_fy_end = latest_q.cur_per_en
+    elif latest_any is not None and latest_any.cur_per_en and (latest_fy is None or latest_any.fiscal_year >= latest_fy.fiscal_year):
+        forecast_anchor_fy_end = latest_any.cur_per_en
+    elif latest_fy is not None and latest_fy.cur_per_en:
+        forecast_anchor_fy_end = latest_fy.cur_per_en
+    if forecast_anchor_fy_end and forecast_anchor_fy_end in records_by_fy_end:
+        candidate_rows = sorted(records_by_fy_end[forecast_anchor_fy_end], key=lambda x: x.disclosed_at, reverse=True)
+        current_forecast = candidate_rows[0]
+        for rec in candidate_rows[1:]:
+            current_forecast = _build_merged_period_record(current_forecast, rec)
+
+        next_forecast = max(
+            candidate_rows,
+            key=lambda rec: (
+                _build_non_empty_count(rec.row, ["NxFSales", "NxFsales", "NxFOP", "NxFOdP", "NxFODP", "NxFNP", "NxFEPS"]),
+                rec.disclosed_at,
+            ),
+        )
+
+    return type(
+        "Periods",
+        (),
+        {
+            "latest_fy": latest_fy,
+            "prev_fy": prev_fy,
+            "latest_quarter": latest_q,
+            "current_forecast": current_forecast,
+            "next_forecast": next_forecast,
+        },
+    )
 
 
 def build_fundamental_output_text_impl(*, name: str, code4: str, master: dict[str, Any] | None, summary_rows: list[dict[str, Any]], price: float | None, market_cap: float | None) -> str:
@@ -121,6 +204,10 @@ def build_fundamental_output_text_impl(*, name: str, code4: str, master: dict[st
         f"■今期会社予想({getattr(periods.latest_quarter, 'fiscal_year', getattr(periods.latest_fy, 'fiscal_year', 'N/A'))}年{getattr(periods.latest_quarter, 'period_type', 'FY')})",
         f"売り上げ予想：{_fmt_money(metrics.get('forecast_sales'))}(YoY {_fmt_pct(metrics.get('forecast_sales_yoy'))})",
         f"営業利益予想：{_fmt_money(metrics.get('forecast_op'))}(YoY {_fmt_pct(metrics.get('forecast_op_yoy'))})",
+        "",
+        "■EPS/PER比較（来期予想・今期末予想・直近四半期）",
+        f"EPS(円)：来期 {_fmt_num(metrics.get('eps_next'),1)} / 今期末 {_fmt_num(metrics.get('eps_forecast'),1)} / 直近四半期 {_fmt_num(metrics.get('eps_quarter'),1)}",
+        f"PER(倍)：来期 {_fmt_num(metrics.get('per_next'))} / 今期末 {_fmt_num(metrics.get('per_forecast'))} / 直近四半期 {_fmt_num(metrics.get('per_quarter'))}",
         "",
         f"■売り上げ予想({getattr(periods.latest_fy, 'fiscal_year', 'N/A') + 1 if periods.latest_fy else 'N/A'}年FY)",
         f"売上予想：{_fmt_money(metrics.get('next_sales'))}（今期比 {_fmt_pct(metrics.get('next_sales_yoy'))}）",

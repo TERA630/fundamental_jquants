@@ -142,7 +142,9 @@ def _build_periods(summary_rows: list[dict[str, Any]]):
     current_forecast = None
     next_forecast = None
     forecast_anchor_fy_end = ""
-    if latest_any is not None and latest_any.cur_per_en:
+    if latest_q is not None and latest_q.cur_per_en:
+        forecast_anchor_fy_end = latest_q.cur_per_en
+    elif latest_any is not None and latest_any.cur_per_en and (latest_fy is None or latest_any.fiscal_year >= latest_fy.fiscal_year):
         forecast_anchor_fy_end = latest_any.cur_per_en
     elif latest_fy is not None and latest_fy.cur_per_en:
         forecast_anchor_fy_end = latest_fy.cur_per_en

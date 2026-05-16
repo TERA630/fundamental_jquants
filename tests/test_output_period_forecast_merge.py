@@ -64,3 +64,28 @@ def test_build_periods_uses_latest_disclosed_fy_end_as_forecast_anchor():
     assert periods.current_forecast is not None
     assert periods.current_forecast.cur_per_en == "2026-03-31"
     assert periods.current_forecast.row.get("FSales") == "1600"
+
+
+def test_build_periods_ignores_old_fy_late_revision_for_forecast_anchor():
+    rows = [
+        {
+            "CurPerType": "3Q",
+            "CurPerSt": "2025-04-01",
+            "CurPerEn": "2026-03-31",
+            "DisclosedDate": "2026-02-12",
+            "FSales": "1600",
+            "NxFSales": "1750",
+        },
+        {
+            "CurPerType": "FY",
+            "CurPerSt": "2023-04-01",
+            "CurPerEn": "2024-03-31",
+            "DisclosedDate": "2026-03-20",
+            "FSales": "999",
+            "NxFSales": "1000",
+        },
+    ]
+    periods = _build_periods(rows)
+    assert periods.current_forecast is not None
+    assert periods.current_forecast.cur_per_en == "2026-03-31"
+    assert periods.current_forecast.row.get("FSales") == "1600"

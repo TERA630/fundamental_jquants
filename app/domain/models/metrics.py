@@ -159,6 +159,11 @@ def calc_metrics(periods: Any, price: float | None) -> dict[str, float | str | N
     next_np_yoy = calc_yoy(next_np, forecast_np)
     next_eps_yoy = calc_yoy(next_eps, forecast_eps)
 
+    quarter_eps = get_value(latest_quarter, ["EPS"], ["EarningsPerShare"])
+    per_forecast = None if price in (None, 0) or forecast_eps in (None, 0) else price / forecast_eps
+    per_next = None if price in (None, 0) or next_eps in (None, 0) else price / next_eps
+    per_quarter = None if price in (None, 0) or quarter_eps in (None, 0) else price / quarter_eps
+
     progress_label, progress_base = progress_base_from_period_type(latest_quarter_rec.period_type if latest_quarter_rec else None)
     actual_progress_sales = get_value(latest_quarter, ["Sales"], ["NetSales", "Revenue", "TotalRevenue"])
     actual_progress_op = get_value(latest_quarter, ["OP", "Op"], ["OperatingProfit", "OperatingIncome"])
@@ -176,6 +181,8 @@ def calc_metrics(periods: Any, price: float | None) -> dict[str, float | str | N
         "forecast_ordinary_yoy": forecast_ordinary_yoy, "forecast_np_yoy": forecast_np_yoy, "forecast_eps_yoy": forecast_eps_yoy,
         "next_sales": next_sales, "next_op": next_op, "next_ordinary": next_ordinary, "next_np": next_np, "next_eps": next_eps,
         "next_sales_yoy": next_sales_yoy, "next_op_yoy": next_op_yoy, "next_ordinary_yoy": next_ordinary_yoy, "next_np_yoy": next_np_yoy, "next_eps_yoy": next_eps_yoy,
+        "eps_forecast": forecast_eps, "eps_next": next_eps, "eps_quarter": quarter_eps,
+        "per_forecast": per_forecast, "per_next": per_next, "per_quarter": per_quarter,
         "sales_progress": sales_progress, "op_progress": op_progress, "progress_label": progress_label,
         "progress_base": progress_base, "latest_fy_label": format_period_record(latest_fy_rec),
         "prev_fy_label": format_period_record(prev_fy_rec), "latest_quarter_label": format_period_record(latest_quarter_rec),

@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.data.utils import first_present, safe_float
+
 
 logger = logging.getLogger(__name__)
 
@@ -41,33 +43,19 @@ def _calc_progress_base(period_type: str | None) -> tuple[str, float | None]:
     return "N/A", None
 
 
-def _safe_float(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(str(value).replace(",", ""))
-    except Exception:
-        return None
-
-
-def _first_present(data: dict[str, Any], keys: list[str]) -> Any:
-    for key in keys:
-        if key in data and data[key] not in (None, ""):
-            return data[key]
-    return None
 
 
 def _get_value(row: dict[str, Any] | None, short_keys: list[str], long_keys: list[str] | None = None) -> float | None:
     if not row:
         return None
-    short_value = _first_present(row, short_keys)
+    short_value = first_present(row, short_keys)
     if short_value not in (None, ""):
-        return _safe_float(short_value)
+        return safe_float(short_value)
     if long_keys:
-        long_value = _first_present(row, long_keys)
+        long_value = first_present(row, long_keys)
         if long_value not in (None, ""):
             logger.warning("V2短縮キー未検出のため互換キーを使用: short=%s long=%s", short_keys, long_keys)
-            return _safe_float(long_value)
+            return safe_float(long_value)
     return None
 
 

@@ -5,12 +5,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from app.data.utils import first_present
+
 
 PERIOD_TYPE_KEYS = ["CurPerType", "TypeOfCurrentPeriod", "CurrentPeriod", "PeriodType", "ToCP", "Tocp"]
 PERIOD_START_KEYS = ["CurPerSt", "CurrentPeriodStartDate", "CurrentFiscalYearStartDate"]
 PERIOD_END_KEYS = ["CurPerEn", "CurrentPeriodEndDate", "CurrentFiscalYearEndDate"]
 DISCLOSED_DATE_KEYS = ["DisclosedDate", "Date"]
 NEXT_FORECAST_KEYS = ["NxFSales", "NxFsales", "NxFOP", "NxFOdP", "NxFODP", "NxFNP", "NxFEPS"]
+PERIOD_TYPE_RULES: list[tuple[str, tuple[str, ...]]] = [
+    ("1Q", ("1Q", "Q1")),
+    ("2Q", ("2Q", "Q2", "HALF")),
+    ("3Q", ("3Q", "Q3")),
+    ("FY", ("FY", "ANNUAL", "FULL")),
+]
 
 
 @dataclass(frozen=True)
@@ -32,25 +40,13 @@ class PeriodSet:
     next_forecast: PeriodRecord | None
 
 
-def _first_present(data: dict[str, Any] | None, keys: list[str]) -> Any:
-    if not data:
-        return None
-    for key in keys:
-        if key in data and data[key] not in (None, ""):
-            return data[key]
-    return None
 
 
 def get_period_type(raw_period_type: str) -> str | None:
     text = raw_period_type.upper()
-    if "1Q" in text or "Q1" in text:
-        return "1Q"
-    if "2Q" in text or "Q2" in text or "HALF" in text:
-        return "2Q"
-    if "3Q" in text or "Q3" in text:
-        return "3Q"
-    if "FY" in text or "ANNUAL" in text or "FULL" in text:
-        return "FY"
+    for normalized, tokens in PERIOD_TYPE_RULES:
+        if any(token in text for token in tokens):
+            return normalized
     return None
 
 
@@ -83,12 +79,12 @@ def fetch_period_set(summary_rows: list[dict[str, Any]]) -> PeriodSet:
     latest_any: PeriodRecord | None = None
 
     for row in summary_rows:
-        raw_period_type = str(_first_present(row, PERIOD_TYPE_KEYS) or "")
+        raw_period_type = str(first_present(row, PERIOD_TYPE_KEYS) or "")
         period_type = get_period_type(raw_period_type)
         if period_type is None:
             continue
 
-        cur_st = str(_first_present(row, PERIOD_START_KEYS) or "")
+        cur_st = str(first_present(row, PERIOD_START_KEYS) or "")
         fiscal_year = int(cur_st[:4]) if len(cur_st) >= 4 and cur_st[:4].isdigit() else None
         if fiscal_year is None:
             continue
@@ -98,8 +94,8 @@ def fetch_period_set(summary_rows: list[dict[str, Any]]) -> PeriodSet:
             period_type=period_type,
             row=row,
             cur_per_st=cur_st,
-            cur_per_en=str(_first_present(row, PERIOD_END_KEYS) or ""),
-            disclosed_at=str(_first_present(row, DISCLOSED_DATE_KEYS) or ""),
+            cur_per_en=str(first_present(row, PERIOD_END_KEYS) or ""),
+            disclosed_at=str(first_present(row, DISCLOSED_DATE_KEYS) or ""),
         )
 
         if rec.cur_per_en:

@@ -37,47 +37,47 @@ class FundamentalAnalysisService:
         self.cache = file_cache or FileCache()
         self.fetch_market_snapshot = fetch_market_snapshot or fetch_yfinance_snapshot
 
+    def build_cache_key_master(self, code4: str) -> str:
+        return f"master_{normalize_code(code4)}"
+
+    def build_cache_key_summary(self, code4: str) -> str:
+        return f"summary_{normalize_code(code4)}"
+
+    def build_cache_key_price_snapshot(self, code4: str) -> str:
+        return f"yf_{code4}"
+
     def fetch_master(self, code4: str) -> dict[str, Any] | None:
-        code5 = normalize_code(code4)
         return self.cache.get_or_fetch(
-            f"master_{code5}",
+            self.build_cache_key_master(code4),
             CACHE_TTL_MASTER_SEC,
             lambda: self.client.get_master(code4),
         )
 
     def fetch_summary_rows(self, code4: str) -> list[dict[str, Any]]:
-        code5 = normalize_code(code4)
         rows = self.cache.get_or_fetch(
-            f"summary_{code5}",
+            self.build_cache_key_summary(code4),
             CACHE_TTL_SUMMARY_SEC,
             lambda: self.client.get_summary(code4),
         )
         return rows if isinstance(rows, list) else []
 
     def fetch_price_snapshot(self, code4: str) -> dict[str, float | None]:
-        cache_key = f"yf_{code4}"
-        if hasattr(self.cache, "get") and hasattr(self.cache, "set"):
-            cached = self.cache.get(cache_key, CACHE_TTL_YF_SEC)
-            if cached is not None and isinstance(cached, dict):
-                return {
-                    "price": cached.get("price"),
-                    "market_cap": cached.get("market_cap"),
-                }
-            snapshot = self.fetch_market_snapshot(code4)
-            if isinstance(snapshot, dict) and snapshot.get("price") is not None:
-                self.cache.set(cache_key, snapshot)
-        else:
-            snapshot = self.cache.get_or_fetch(
-                cache_key,
-                CACHE_TTL_YF_SEC,
-                lambda: self.fetch_market_snapshot(code4),
-            )
-        if not isinstance(snapshot, dict):
-            return {"price": None, "market_cap": None}
-        return {
-            "price": snapshot.get("price"),
-            "market_cap": snapshot.get("market_cap"),
-        }
+        cache_key = self.build_cache_key_price_snapshot(code4)
+        cached = self.cache.get(cache_key, CACHE_TTL_YF_SEC)
+        if isinstance(cached, dict):
+            return {
+                "price": cached.get("price"),
+                "market_cap": cached.get("market_cap"),
+            }
+
+        snapshot = self.fetch_market_snapshot(code4)
+        if isinstance(snapshot, dict) and snapshot.get("price") is not None:
+            self.cache.set(cache_key, snapshot)
+            return {
+                "price": snapshot.get("price"),
+                "market_cap": snapshot.get("market_cap"),
+            }
+        return {"price": None, "market_cap": None}
 
     def build_analysis_output(self, name: str, code4: str, build_output_fn: Callable[..., str]) -> str:
         master = self.fetch_master(code4)

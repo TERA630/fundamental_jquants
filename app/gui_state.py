@@ -12,6 +12,7 @@ class GuiState:
 
     watchlist_path: Path | None = None
     kabutan_html_dir: Path | None = None
+    allow_kabutan_web_fallback: bool = True
     watchlist: list[tuple[str, str]] = field(default_factory=list)
     display_to_code: dict[str, tuple[str, str]] = field(default_factory=dict)
     output_cache: dict[str, str] = field(default_factory=dict)

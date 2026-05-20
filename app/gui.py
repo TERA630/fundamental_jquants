@@ -29,11 +29,20 @@ class FundamentalApp:
         self.api_key_var = tk.StringVar(value=os.environ.get("JQUANTS_API_KEY", ""))
         self.path_var = tk.StringVar(value="監視銘柄ファイル未選択")
         self.kabutan_dir_var = tk.StringVar(value="株探HTMLフォルダ未選択（未選択時はWeb取得）")
+        self.allow_kabutan_web_fallback_var = tk.BooleanVar(value=True)
         self.stock_var = tk.StringVar()
         self.status_var = tk.StringVar(value="監視銘柄ファイルを読み込んでください。")
 
         self.view_model = GuiViewModel()
-        self.view = FundamentalView(self.master, self.api_key_var, self.path_var, self.stock_var, self.status_var, self.kabutan_dir_var)
+        self.view = FundamentalView(
+            self.master,
+            self.api_key_var,
+            self.path_var,
+            self.stock_var,
+            self.status_var,
+            self.kabutan_dir_var,
+            self.allow_kabutan_web_fallback_var,
+        )
         self.view.build_ui(
             on_open=self.open_watchlist,
             on_select=self.on_stock_selected,
@@ -131,6 +140,7 @@ class FundamentalApp:
                 code4=code4,
                 output_cache=self.state.output_cache,
                 kabutan_html_dir=self.state.kabutan_html_dir,
+                allow_kabutan_web_fallback=self.allow_kabutan_web_fallback_var.get(),
             )
             self.master.after(0, lambda: self._render_output(output, self.view_model.build_generated_status(name, code4)))
         except Exception as exc:

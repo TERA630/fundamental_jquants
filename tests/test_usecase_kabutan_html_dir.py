@@ -88,6 +88,21 @@ def test_fetch_kabutan_forecast_pair_prefers_html_dir(tmp_path: Path):
 
     result = service.fetch_kabutan_forecast_pair("7203", html_dir=html_dir)
 
-    assert result == pair
+    assert result.pair == pair
+    assert result.source == "html"
     assert repo.file_calls == 1
+    assert repo.web_calls == 0
+
+
+def test_fetch_kabutan_forecast_pair_returns_none_source_when_web_opt_out_and_html_missing(tmp_path: Path):
+    pair = _build_pair()
+    repo = StubRepository(result=pair)
+    service = FundamentalAnalysisService(api_key="dummy", kabutan_usecase=StubUseCase(repository=repo))
+    html_dir = tmp_path / "kabutan"
+    html_dir.mkdir()
+
+    result = service.fetch_kabutan_forecast_pair("7203", html_dir=html_dir, allow_kabutan_web_fallback=False)
+
+    assert result.pair is None
+    assert result.source == "none"
     assert repo.web_calls == 0

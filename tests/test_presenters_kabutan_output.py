@@ -10,7 +10,7 @@ def test_build_kabutan_forecast_output_appends_section():
         next_forecast=KabutanForecastRow("2027.03", 2027, 3, "予想", 1350, 150, 140, 120),
     )
 
-    text = build_kabutan_forecast_output(base, pair)
+    text = build_kabutan_forecast_output(base, pair, "html", None)
 
     assert "■株探 業績推移（通期）" in text
     assert "2025年" in text
@@ -18,5 +18,8 @@ def test_build_kabutan_forecast_output_appends_section():
     assert "2027年(予)" in text
 
 
-def test_build_kabutan_forecast_output_keeps_base_when_none():
-    assert build_kabutan_forecast_output("base output", None) == "base output"
+def test_build_kabutan_forecast_output_renders_na_rows_when_none():
+    text = build_kabutan_forecast_output("base output", None, "none", "HTML解析に失敗")
+    assert "■株探 業績推移（通期）" in text
+    assert "株探ソース: 取得不可 (HTML解析に失敗)" in text
+    assert "N/A" in text

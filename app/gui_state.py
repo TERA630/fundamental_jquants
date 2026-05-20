@@ -11,6 +11,7 @@ class GuiState:
     """GUI表示に必要な状態を保持する。"""
 
     watchlist_path: Path | None = None
+    kabutan_html_dir: Path | None = None
     watchlist: list[tuple[str, str]] = field(default_factory=list)
     display_to_code: dict[str, tuple[str, str]] = field(default_factory=dict)
     output_cache: dict[str, str] = field(default_factory=dict)

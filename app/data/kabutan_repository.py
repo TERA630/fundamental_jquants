@@ -113,6 +113,10 @@ class KabutanForecastRepository:
         self.file_cache.set(cache_key, html)
         return html
 
+    def fetch_kabutan_forecast_pair_from_file(self, html_path: str | Path, target_years: tuple[int, int] | None = None) -> KabutanForecastPair:
+        html = self.fetch_kabutan_html_from_file(html_path)
+        return self._fetch_forecast_pair_from_html(html, target_years=target_years)
+
     @staticmethod
     def get_kabutan_cache_payload(pair: KabutanForecastPair) -> dict[str, object]:
         rows = []

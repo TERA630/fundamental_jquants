@@ -28,17 +28,19 @@ class FundamentalApp:
 
         self.api_key_var = tk.StringVar(value=os.environ.get("JQUANTS_API_KEY", ""))
         self.path_var = tk.StringVar(value="監視銘柄ファイル未選択")
+        self.kabutan_dir_var = tk.StringVar(value="株探HTMLフォルダ未選択（未選択時はWeb取得）")
         self.stock_var = tk.StringVar()
         self.status_var = tk.StringVar(value="監視銘柄ファイルを読み込んでください。")
 
         self.view_model = GuiViewModel()
-        self.view = FundamentalView(self.master, self.api_key_var, self.path_var, self.stock_var, self.status_var)
+        self.view = FundamentalView(self.master, self.api_key_var, self.path_var, self.stock_var, self.status_var, self.kabutan_dir_var)
         self.view.build_ui(
             on_open=self.open_watchlist,
             on_select=self.on_stock_selected,
             on_fetch=self.generate_text,
             on_copy=self.copy_text,
             on_save=self.save_text,
+            on_open_kabutan_dir=self.open_kabutan_html_dir,
         )
 
     def set_busy(self, busy: bool, status: str | None = None):
@@ -63,6 +65,14 @@ class FundamentalApp:
         self.state.output_cache.clear()
         self.path_var.set(str(self.state.watchlist_path))
         self._populate_stock_choices()
+
+    def open_kabutan_html_dir(self):
+        path = filedialog.askdirectory(title="株探HTML保存フォルダを選択")
+        if not path:
+            return
+        self.state.kabutan_html_dir = Path(path)
+        self.kabutan_dir_var.set(str(self.state.kabutan_html_dir))
+        self.status_var.set("株探HTMLフォルダを設定しました。")
 
     def _populate_stock_choices(self) -> None:
         values, mapping = build_stock_choices(self.state.watchlist)
@@ -120,6 +130,7 @@ class FundamentalApp:
                 name=name,
                 code4=code4,
                 output_cache=self.state.output_cache,
+                kabutan_html_dir=self.state.kabutan_html_dir,
             )
             self.master.after(0, lambda: self._render_output(output, self.view_model.build_generated_status(name, code4)))
         except Exception as exc:

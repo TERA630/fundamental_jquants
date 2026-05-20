@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from typing import Any, Callable, Protocol
+from pathlib import Path
 
 from app.data.file_cache import FileCache
 from app.data.jquants_client import JQuantsClient
+from app.data.kabutan_repository import KabutanForecastRepository
 from app.data.market_data_provider import fetch_yfinance_snapshot
 from app.data.utils import normalize_code
+from app.domain.models.kabutan_forecast import KabutanForecastPair
+from app.domain.usecases.kabutan_forecast import FetchKabutanForecastUseCase
 
 CACHE_TTL_MASTER_SEC = 30 * 24 * 60 * 60
 CACHE_TTL_SUMMARY_SEC = 24 * 60 * 60
@@ -32,10 +36,12 @@ class FundamentalAnalysisService:
         file_cache: FileCache | None = None,
         client: JQuantsClientPort | None = None,
         fetch_market_snapshot: MarketDataProviderPort | None = None,
+        kabutan_usecase: FetchKabutanForecastUseCase | None = None,
     ):
         self.client = client or JQuantsClient(api_key)
         self.cache = file_cache or FileCache()
         self.fetch_market_snapshot = fetch_market_snapshot or fetch_yfinance_snapshot
+        self.kabutan_usecase = kabutan_usecase or FetchKabutanForecastUseCase(repository=KabutanForecastRepository())
 
     def build_cache_key_master(self, code4: str) -> str:
         return f"master_{normalize_code(code4)}"
@@ -79,10 +85,11 @@ class FundamentalAnalysisService:
             }
         return {"price": None, "market_cap": None}
 
-    def build_analysis_output(self, name: str, code4: str, build_output_fn: Callable[..., str]) -> str:
+    def build_analysis_output(self, name: str, code4: str, build_output_fn: Callable[..., str], kabutan_html_dir: Path | None = None) -> str:
         master = self.fetch_master(code4)
         summary_rows = self.fetch_summary_rows(code4)
         price_snapshot = self.fetch_price_snapshot(code4)
+        kabutan_forecast_pair = self.fetch_kabutan_forecast_pair(code4, html_dir=kabutan_html_dir)
         return build_output_fn(
             name=name,
             code4=code4,
@@ -90,7 +97,23 @@ class FundamentalAnalysisService:
             summary_rows=summary_rows,
             price=price_snapshot.get("price"),
             market_cap=price_snapshot.get("market_cap"),
+            kabutan_forecast_pair=kabutan_forecast_pair,
         )
+
+    def fetch_kabutan_forecast_pair(self, code4: str, html_dir: Path | None = None) -> KabutanForecastPair | None:
+        if html_dir is not None:
+            html_candidates = [html_dir / f"{code4}.html", html_dir / f"{code4}.htm"]
+            for html_path in html_candidates:
+                if html_path.exists():
+                    try:
+                        repository = self.kabutan_usecase.repository
+                        return repository.fetch_kabutan_forecast_pair_from_file(html_path)
+                    except Exception:
+                        break
+        try:
+            return self.kabutan_usecase.get_kabutan_forecast_pair(code4)
+        except Exception:
+            return None
 
 
 __all__ = ["FundamentalAnalysisService"]

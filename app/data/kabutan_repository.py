@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import re
 from html import unescape
+from pathlib import Path
 from urllib.request import Request, urlopen
 
+from app.data.file_cache import FileCache
 from app.domain.models.kabutan_forecast import KabutanForecastPair, KabutanForecastRow
 
 
@@ -61,9 +63,37 @@ def _parse_kabutan_forecast_rows(html: str) -> list[KabutanForecastRow]:
     return rows
 
 
+def _build_forecast_pair_from_rows(rows: list[KabutanForecastRow], target_years: tuple[int, int] | None = None) -> KabutanForecastPair:
+    forecast_idx = next((idx for idx, row in enumerate(rows) if row.section == "予想"), None)
+    if forecast_idx is None:
+        raise ValueError("予想行が見つかりません")
+
+    current_forecast = rows[forecast_idx]
+    previous_actual = rows[forecast_idx - 1] if forecast_idx > 0 else None
+    next_forecast = rows[forecast_idx + 1] if len(rows) > forecast_idx + 1 and rows[forecast_idx + 1].section == "予想" else None
+
+    if target_years is not None:
+        year_set = set(target_years)
+        if current_forecast.year not in year_set:
+            raise ValueError(f"今期予想の年度 {current_forecast.year} が対象年度 {sorted(year_set)} に含まれません")
+        if next_forecast is not None and next_forecast.year not in year_set:
+            next_forecast = None
+
+    return KabutanForecastPair(previous_actual=previous_actual, current_forecast=current_forecast, next_forecast=next_forecast)
+
+
 class KabutanForecastRepository:
-    def __init__(self, timeout_sec: int = 10):
+    def __init__(self, timeout_sec: int = 10, file_cache: FileCache | None = None):
         self.timeout_sec = timeout_sec
+        self.file_cache = file_cache or FileCache()
+
+    @staticmethod
+    def build_cache_key_kabutan_forecast(code: str) -> str:
+        return f"kabutan_forecast_{code}"
+
+    @staticmethod
+    def build_cache_key_kabutan_html(path: Path) -> str:
+        return f"kabutan_html_{path.resolve()}"
 
     def fetch_kabutan_html(self, code: str) -> str:
         url = _build_kabutan_url(code)
@@ -73,26 +103,69 @@ class KabutanForecastRepository:
             charset = response.headers.get_content_charset() or "utf-8"
         return body.decode(charset, errors="ignore")
 
-    def fetch_kabutan_forecast_pair(self, code: str, target_years: tuple[int, int] | None = None) -> KabutanForecastPair:
-        html = self.fetch_kabutan_html(code)
+    def fetch_kabutan_html_from_file(self, html_path: str | Path) -> str:
+        path = Path(html_path)
+        cache_key = self.build_cache_key_kabutan_html(path)
+        cached_html = self.file_cache.get(cache_key, ttl_sec=365 * 24 * 60 * 60)
+        if isinstance(cached_html, str) and cached_html:
+            return cached_html
+        html = path.read_text(encoding="utf-8")
+        self.file_cache.set(cache_key, html)
+        return html
+
+    @staticmethod
+    def get_kabutan_cache_payload(pair: KabutanForecastPair) -> dict[str, object]:
+        rows = []
+        for row in (pair.previous_actual, pair.current_forecast, pair.next_forecast):
+            if row is None:
+                continue
+            rows.append(
+                {
+                    "fiscal_year": f"{row.year}/{row.month:02d}",
+                    "forecast_type": row.section,
+                    "period_type": "通期",
+                    "sales": row.sales,
+                    "op_income": row.operating_profit,
+                    "ordinary_income": row.ordinary_profit,
+                    "np": row.final_profit,
+                    "eps": None,
+                    "div": None,
+                }
+            )
+        return {"rows": rows}
+
+    def _fetch_forecast_pair_from_html(self, html: str, target_years: tuple[int, int] | None = None) -> KabutanForecastPair:
         rows = _parse_kabutan_forecast_rows(html)
+        return _build_forecast_pair_from_rows(rows, target_years=target_years)
 
-        forecast_idx = next((idx for idx, row in enumerate(rows) if row.section == "予想"), None)
-        if forecast_idx is None:
-            raise ValueError("予想行が見つかりません")
+    def fetch_kabutan_forecast_pair(self, code: str, target_years: tuple[int, int] | None = None) -> KabutanForecastPair:
+        cache_key = self.build_cache_key_kabutan_forecast(code)
+        cached_payload = self.file_cache.get(cache_key, ttl_sec=12 * 60 * 60)
+        if isinstance(cached_payload, dict):
+            try:
+                rows = cached_payload.get("rows")
+                if isinstance(rows, list) and rows:
+                    parsed_rows = [
+                        KabutanForecastRow(
+                            period_label=str(row["fiscal_year"]).replace("/", "."),
+                            year=int(str(row["fiscal_year"]).split("/")[0]),
+                            month=int(str(row["fiscal_year"]).split("/")[1]),
+                            section=str(row.get("forecast_type", "実績")),
+                            sales=row.get("sales"),
+                            operating_profit=row.get("op_income"),
+                            ordinary_profit=row.get("ordinary_income"),
+                            final_profit=row.get("np"),
+                        )
+                        for row in rows
+                    ]
+                    return _build_forecast_pair_from_rows(parsed_rows, target_years=target_years)
+            except Exception:
+                pass
 
-        current_forecast = rows[forecast_idx]
-        previous_actual = rows[forecast_idx - 1] if forecast_idx > 0 else None
-        next_forecast = rows[forecast_idx + 1] if len(rows) > forecast_idx + 1 and rows[forecast_idx + 1].section == "予想" else None
-
-        if target_years is not None:
-            year_set = set(target_years)
-            if current_forecast.year not in year_set:
-                raise ValueError(f"今期予想の年度 {current_forecast.year} が対象年度 {sorted(year_set)} に含まれません")
-            if next_forecast is not None and next_forecast.year not in year_set:
-                next_forecast = None
-
-        return KabutanForecastPair(previous_actual=previous_actual, current_forecast=current_forecast, next_forecast=next_forecast)
+        html = self.fetch_kabutan_html(code)
+        pair = self._fetch_forecast_pair_from_html(html, target_years=target_years)
+        self.file_cache.set(cache_key, self.get_kabutan_cache_payload(pair))
+        return pair
 
 
 __all__ = ["KabutanForecastRepository", "_parse_kabutan_forecast_rows"]

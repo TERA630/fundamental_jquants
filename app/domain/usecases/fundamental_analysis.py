@@ -29,6 +29,12 @@ class MarketDataProviderPort(Protocol):
     def __call__(self, code4: str) -> dict[str, float | None]: ...
 
 
+class KabutanForecastRepositoryPort(Protocol):
+    def fetch_kabutan_forecast_pair_from_file(
+        self, html_path: str | Path, target_years: tuple[int, int] | None = None
+    ) -> KabutanForecastPair: ...
+
+
 @dataclass(frozen=True)
 class KabutanFetchResult:
     pair: KabutanForecastPair | None
@@ -100,7 +106,6 @@ class FundamentalAnalysisService:
         code4: str,
         build_output_fn: Callable[..., str],
         kabutan_html_dir: Path | None = None,
-        allow_kabutan_web_fallback: bool = True,
     ) -> str:
         master = self.fetch_master(code4)
         summary_rows = self.fetch_summary_rows(code4)
@@ -108,7 +113,6 @@ class FundamentalAnalysisService:
         kabutan_fetch_result = self.fetch_kabutan_forecast_pair(
             code4,
             html_dir=kabutan_html_dir,
-            allow_kabutan_web_fallback=allow_kabutan_web_fallback,
         )
         return build_output_fn(
             name=name,
@@ -122,9 +126,8 @@ class FundamentalAnalysisService:
             kabutan_source_message=kabutan_fetch_result.message,
         )
 
-    def fetch_kabutan_forecast_pair(
-        self, code4: str, html_dir: Path | None = None, allow_kabutan_web_fallback: bool = True
-    ) -> KabutanFetchResult:
+    def fetch_kabutan_forecast_pair(self, code4: str, html_dir: Path | None = None) -> KabutanFetchResult:
+        repository: KabutanForecastRepositoryPort = self.kabutan_usecase.repository
         if html_dir is None:
             return KabutanFetchResult(pair=None, source="none", message="HTMLフォルダ未設定")
 
@@ -132,7 +135,6 @@ class FundamentalAnalysisService:
         for html_path in html_candidates:
             if html_path.exists():
                 try:
-                    repository = self.kabutan_usecase.repository
                     return KabutanFetchResult(pair=repository.fetch_kabutan_forecast_pair_from_file(html_path), source="html")
                 except Exception:
                     continue

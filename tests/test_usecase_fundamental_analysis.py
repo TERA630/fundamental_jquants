@@ -138,6 +138,25 @@ class TestFundamentalAnalysisService(unittest.TestCase):
         self.assertEqual(snap2, {"price": None, "market_cap": None})
         self.assertEqual(market.calls, 2)
 
+    def test_fetch_kabutan_forecast_pair_returns_none_when_html_dir_is_none(self):
+        class FakeKabutanUseCase:
+            def __init__(self):
+                self.repository = object()
+
+        service = FundamentalAnalysisService(
+            api_key="dummy",
+            file_cache=InMemoryCache(),
+            client=FakeClient(),
+            fetch_market_snapshot=FakeMarketProvider(),
+            kabutan_usecase=FakeKabutanUseCase(),
+        )
+
+        result = service.fetch_kabutan_forecast_pair("8058", html_dir=None)
+
+        self.assertEqual(result.source, "none")
+        self.assertEqual(result.message, "HTMLフォルダ未設定")
+        self.assertIsNone(result.pair)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -63,6 +63,13 @@ def _parse_kabutan_forecast_rows(html: str) -> list[KabutanForecastRow]:
     return rows
 
 
+def _extract_kabutan_visible_body(html: str) -> str:
+    block_match = re.search(r'<div[^>]*class="[^"]*fin_year_result_d[^"]*"[^>]*>.*?</div>', html, flags=re.DOTALL)
+    if block_match is None:
+        return html
+    return block_match.group(0)
+
+
 def _build_forecast_pair_from_rows(rows: list[KabutanForecastRow], target_years: tuple[int, int] | None = None) -> KabutanForecastPair:
     forecast_idx = next((idx for idx, row in enumerate(rows) if row.section == "予想"), None)
     if forecast_idx is None:
@@ -110,8 +117,9 @@ class KabutanForecastRepository:
         if isinstance(cached_html, str) and cached_html:
             return cached_html
         html = path.read_text(encoding="utf-8")
-        self.file_cache.set(cache_key, html)
-        return html
+        visible_html = _extract_kabutan_visible_body(html)
+        self.file_cache.set(cache_key, visible_html)
+        return visible_html
 
     def fetch_kabutan_forecast_pair_from_file(self, html_path: str | Path, target_years: tuple[int, int] | None = None) -> KabutanForecastPair:
         html = self.fetch_kabutan_html_from_file(html_path)
@@ -172,4 +180,4 @@ class KabutanForecastRepository:
         return pair
 
 
-__all__ = ["KabutanForecastRepository", "_parse_kabutan_forecast_rows"]
+__all__ = ["KabutanForecastRepository", "_parse_kabutan_forecast_rows", "_extract_kabutan_visible_body"]

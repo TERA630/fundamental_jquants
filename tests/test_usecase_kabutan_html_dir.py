@@ -51,9 +51,12 @@ class StubRepository:
     result: KabutanForecastPair
     file_calls: int = 0
     web_calls: int = 0
+    fail_suffixes: tuple[str, ...] = ()
 
     def fetch_kabutan_forecast_pair_from_file(self, html_path: Path) -> KabutanForecastPair:
         self.file_calls += 1
+        if html_path.suffix in self.fail_suffixes:
+            raise ValueError(f"failed: {html_path.name}")
         return self.result
 
     def fetch_kabutan_forecast_pair(self, code: str, target_years: tuple[int, int] | None = None) -> KabutanForecastPair:
@@ -105,4 +108,39 @@ def test_fetch_kabutan_forecast_pair_returns_none_source_when_web_opt_out_and_ht
 
     assert result.pair is None
     assert result.source == "none"
+    assert repo.web_calls == 0
+
+
+def test_fetch_kabutan_forecast_pair_supports_partial_filename_match(tmp_path: Path):
+    pair = _build_pair()
+    repo = StubRepository(result=pair)
+    service = FundamentalAnalysisService(api_key="dummy", kabutan_usecase=StubUseCase(repository=repo))
+
+    html_dir = tmp_path / "kabutan"
+    html_dir.mkdir()
+    (html_dir / "INPEX【1605】_finance.html").write_text("<html></html>", encoding="utf-8")
+
+    result = service.fetch_kabutan_forecast_pair("1605", html_dir=html_dir, allow_kabutan_web_fallback=False)
+
+    assert result.pair == pair
+    assert result.source == "html"
+    assert repo.file_calls == 1
+    assert repo.web_calls == 0
+
+
+def test_fetch_kabutan_forecast_pair_try_htm_after_html_parse_failure(tmp_path: Path):
+    pair = _build_pair()
+    repo = StubRepository(result=pair, fail_suffixes=(".html",))
+    service = FundamentalAnalysisService(api_key="dummy", kabutan_usecase=StubUseCase(repository=repo))
+
+    html_dir = tmp_path / "kabutan"
+    html_dir.mkdir()
+    (html_dir / "1605.html").write_text("<broken></broken>", encoding="utf-8")
+    (html_dir / "1605.htm").write_text("<valid></valid>", encoding="utf-8")
+
+    result = service.fetch_kabutan_forecast_pair("1605", html_dir=html_dir, allow_kabutan_web_fallback=False)
+
+    assert result.pair == pair
+    assert result.source == "html"
+    assert repo.file_calls == 2
     assert repo.web_calls == 0

@@ -40,6 +40,22 @@ def test_parse_kabutan_forecast_rows_extracts_eps_and_dividend_by_header():
     assert rows[0].dividend == 24.0
 
 
+def test_parse_kabutan_forecast_rows_extracts_dividend_when_header_is_one_share_dividend():
+    html = """
+    <div class="fin_year_result_d">
+      <table>
+        <thead><tr><th>決算期</th><th>売上高</th><th>営業益</th><th>経常益</th><th>最終益</th><th><span>修正<br>1株益</span></th><th><span>修正<br>1株配</span></th></tr></thead>
+        <tbody>
+          <tr><th><span class="kabun1">2026.03予</span></th><td>3313018</td><td>170447</td><td>167671</td><td>114000</td><td>84.9</td><td>22</td></tr>
+        </tbody>
+      </table>
+    </div>
+    """
+    rows = _parse_kabutan_forecast_rows(html)
+    assert rows[0].revised_eps == 84.9
+    assert rows[0].dividend == 22.0
+
+
 def test_build_kabutan_forecast_snapshot_handles_post_earnings_layout_for_2026():
     rows = _parse_kabutan_forecast_rows(
         """

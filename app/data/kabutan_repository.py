@@ -59,7 +59,7 @@ def _parse_kabutan_forecast_rows(html: str) -> list[KabutanForecastRow]:
         period_label, year, month = parsed_period
         heading = cleaned_cells[0]
         revised_eps_idx = next((idx for idx, col in enumerate(header_cells) if "1株益" in col), None)
-        dividend_idx = next((idx for idx, col in enumerate(header_cells) if "配当" in col), None)
+        dividend_idx = next((idx for idx, col in enumerate(header_cells) if "配当" in col or "1株配" in col), None)
         rows.append(
             KabutanForecastRow(
                 period_label=period_label,

@@ -10,7 +10,7 @@ from tkinter import filedialog, messagebox
 
 from app.data.api_key_provider import fetch_api_key_fallback
 from app.gui_controller import FundamentalGuiController
-from app.gui_state import GuiState, build_default_output_filename, build_stock_choices, get_selected_stock
+from app.gui_state import GuiState, build_default_output_filename, build_output_cache_key, build_stock_choices, get_selected_stock
 from app.gui_view import FundamentalView
 from app.gui_view_model import GuiViewModel
 
@@ -28,17 +28,28 @@ class FundamentalApp:
 
         self.api_key_var = tk.StringVar(value=os.environ.get("JQUANTS_API_KEY", ""))
         self.path_var = tk.StringVar(value="監視銘柄ファイル未選択")
+        self.kabutan_dir_var = tk.StringVar(value="株探HTMLフォルダ未選択（未選択時はWeb取得）")
+        self.allow_kabutan_web_fallback_var = tk.BooleanVar(value=True)
         self.stock_var = tk.StringVar()
         self.status_var = tk.StringVar(value="監視銘柄ファイルを読み込んでください。")
 
         self.view_model = GuiViewModel()
-        self.view = FundamentalView(self.master, self.api_key_var, self.path_var, self.stock_var, self.status_var)
+        self.view = FundamentalView(
+            self.master,
+            self.api_key_var,
+            self.path_var,
+            self.stock_var,
+            self.status_var,
+            self.kabutan_dir_var,
+            self.allow_kabutan_web_fallback_var,
+        )
         self.view.build_ui(
             on_open=self.open_watchlist,
             on_select=self.on_stock_selected,
             on_fetch=self.generate_text,
             on_copy=self.copy_text,
             on_save=self.save_text,
+            on_open_kabutan_dir=self.open_kabutan_html_dir,
         )
 
     def set_busy(self, busy: bool, status: str | None = None):
@@ -63,6 +74,15 @@ class FundamentalApp:
         self.state.output_cache.clear()
         self.path_var.set(str(self.state.watchlist_path))
         self._populate_stock_choices()
+
+    def open_kabutan_html_dir(self):
+        path = filedialog.askdirectory(title="株探HTML保存フォルダを選択")
+        if not path:
+            return
+        self.state.kabutan_html_dir = Path(path)
+        self.state.output_cache.clear()
+        self.kabutan_dir_var.set(str(self.state.kabutan_html_dir))
+        self.status_var.set("株探HTMLフォルダを設定しました（出力キャッシュをクリア）。")
 
     def _populate_stock_choices(self) -> None:
         values, mapping = build_stock_choices(self.state.watchlist)
@@ -113,13 +133,16 @@ class FundamentalApp:
         self.set_busy(False, "取得に失敗しました。")
         messagebox.showerror("取得失敗", message)
 
-    def _fetch_worker(self, name: str, code4: str, api_key: str):
+    def _fetch_worker(self, name: str, code4: str, api_key: str, cache_key: str):
         try:
             output = self.controller.fetch_analysis_output(
                 api_key=api_key,
                 name=name,
                 code4=code4,
                 output_cache=self.state.output_cache,
+                output_cache_key=cache_key,
+                kabutan_html_dir=self.state.kabutan_html_dir,
+                allow_kabutan_web_fallback=self.allow_kabutan_web_fallback_var.get(),
             )
             self.master.after(0, lambda: self._render_output(output, self.view_model.build_generated_status(name, code4)))
         except Exception as exc:
@@ -138,13 +161,14 @@ class FundamentalApp:
             return
 
         name, code4 = selected
-        cached_output = self.state.output_cache.get(code4)
+        cache_key = build_output_cache_key(code4, self.state.kabutan_html_dir, self.allow_kabutan_web_fallback_var.get())
+        cached_output = self.state.output_cache.get(cache_key)
         if cached_output is not None:
             self._render_output(cached_output, self.view_model.build_cached_status(name, code4))
             return
 
         self.set_busy(True, self.view_model.build_fetching_status(name, code4))
-        thread = threading.Thread(target=self._fetch_worker, args=(name, code4, api_key), daemon=True)
+        thread = threading.Thread(target=self._fetch_worker, args=(name, code4, api_key, cache_key), daemon=True)
         thread.start()
 
     def copy_text(self):

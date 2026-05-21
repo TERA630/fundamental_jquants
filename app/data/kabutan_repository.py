@@ -5,10 +5,29 @@ from __future__ import annotations
 import re
 from html import unescape
 from pathlib import Path
+from typing import TypedDict
 from urllib.request import Request, urlopen
 
 from app.data.file_cache import FileCache
 from app.domain.models.kabutan_forecast import KabutanForecastPair, KabutanForecastRow, KabutanForecastSnapshot
+
+
+KABUTAN_HEADER_ALIASES = {
+    "revised_eps": ("1株益",),
+    "dividend": ("配当", "1株配"),
+}
+
+
+class KabutanCacheRow(TypedDict):
+    fiscal_year: str
+    forecast_type: str
+    period_type: str
+    sales: int | None
+    op_income: int | None
+    ordinary_income: int | None
+    np: int | None
+    eps: float | None
+    div: float | None
 
 
 def _to_int(text: str) -> int | None:
@@ -37,7 +56,7 @@ def _clean_cell_text(text: str) -> str:
     return re.sub(r"\s+", " ", unescape(text_no_tags)).strip()
 
 
-def _parse_kabutan_forecast_rows(html: str) -> list[KabutanForecastRow]:
+def _fetch_kabutan_table_html(html: str) -> str:
     table_match = re.search(
         r'<div[^>]*class="[^"]*fin_year_result_d[^"]*"[^>]*>[\s\S]*?<table[^>]*>([\s\S]*?)</table>',
         html,
@@ -45,8 +64,47 @@ def _parse_kabutan_forecast_rows(html: str) -> list[KabutanForecastRow]:
     )
     if table_match is None:
         raise ValueError("通期・業績推移テーブルが見つかりません")
+    return table_match.group(1)
 
-    block = table_match.group(1)
+
+def _get_kabutan_header_index(header_cells: list[str], metric_key: str) -> int | None:
+    aliases = KABUTAN_HEADER_ALIASES.get(metric_key, ())
+    return next((idx for idx, col in enumerate(header_cells) if any(alias in col for alias in aliases)), None)
+
+
+def build_kabutan_cache_row(row: KabutanForecastRow) -> KabutanCacheRow:
+    return {
+        "fiscal_year": f"{row.year}/{row.month:02d}",
+        "forecast_type": row.section,
+        "period_type": "通期",
+        "sales": row.sales,
+        "op_income": row.operating_profit,
+        "ordinary_income": row.ordinary_profit,
+        "np": row.final_profit,
+        "eps": row.revised_eps,
+        "div": row.dividend,
+    }
+
+
+def build_kabutan_forecast_row_from_cache(cache_row: KabutanCacheRow) -> KabutanForecastRow:
+    fiscal_year = str(cache_row["fiscal_year"])
+    year_text, month_text = fiscal_year.split("/")
+    return KabutanForecastRow(
+        period_label=fiscal_year.replace("/", "."),
+        year=int(year_text),
+        month=int(month_text),
+        section=str(cache_row.get("forecast_type", "実績")),
+        sales=cache_row.get("sales"),
+        operating_profit=cache_row.get("op_income"),
+        ordinary_profit=cache_row.get("ordinary_income"),
+        final_profit=cache_row.get("np"),
+        revised_eps=cache_row.get("eps"),
+        dividend=cache_row.get("div"),
+    )
+
+
+def _parse_kabutan_forecast_rows(html: str) -> list[KabutanForecastRow]:
+    block = _fetch_kabutan_table_html(html)
     rows: list[KabutanForecastRow] = []
     header_cells: list[str] = []
     for row_html in re.findall(r"<tr[^>]*>(.*?)</tr>", block, flags=re.DOTALL):
@@ -62,8 +120,8 @@ def _parse_kabutan_forecast_rows(html: str) -> list[KabutanForecastRow]:
             continue
         period_label, year, month = parsed_period
         heading = cleaned_cells[0]
-        revised_eps_idx = next((idx for idx, col in enumerate(header_cells) if "1株益" in col), None)
-        dividend_idx = next((idx for idx, col in enumerate(header_cells) if "配当" in col or "1株配" in col), None)
+        revised_eps_idx = _get_kabutan_header_index(header_cells, "revised_eps")
+        dividend_idx = _get_kabutan_header_index(header_cells, "dividend")
         rows.append(
             KabutanForecastRow(
                 period_label=period_label,
@@ -167,19 +225,7 @@ class KabutanForecastRepository:
         for row in (pair.previous_actual, pair.current_forecast, pair.next_forecast):
             if row is None:
                 continue
-            rows.append(
-                {
-                    "fiscal_year": f"{row.year}/{row.month:02d}",
-                    "forecast_type": row.section,
-                    "period_type": "通期",
-                    "sales": row.sales,
-                    "op_income": row.operating_profit,
-                    "ordinary_income": row.ordinary_profit,
-                    "np": row.final_profit,
-                    "eps": row.revised_eps,
-                    "div": row.dividend,
-                }
-            )
+            rows.append(build_kabutan_cache_row(row))
         return {"rows": rows}
 
     def _fetch_forecast_pair_from_html(self, html: str, target_years: tuple[int, int] | None = None) -> KabutanForecastPair:
@@ -193,21 +239,7 @@ class KabutanForecastRepository:
             try:
                 rows = cached_payload.get("rows")
                 if isinstance(rows, list) and rows:
-                    parsed_rows = [
-                        KabutanForecastRow(
-                            period_label=str(row["fiscal_year"]).replace("/", "."),
-                            year=int(str(row["fiscal_year"]).split("/")[0]),
-                            month=int(str(row["fiscal_year"]).split("/")[1]),
-                            section=str(row.get("forecast_type", "実績")),
-                            sales=row.get("sales"),
-                            operating_profit=row.get("op_income"),
-                            ordinary_profit=row.get("ordinary_income"),
-                            final_profit=row.get("np"),
-                            revised_eps=row.get("eps"),
-                            dividend=row.get("div"),
-                        )
-                        for row in rows
-                    ]
+                    parsed_rows = [build_kabutan_forecast_row_from_cache(row) for row in rows if isinstance(row, dict)]
                     return _build_forecast_pair_from_rows(parsed_rows, target_years=target_years)
             except Exception:
                 pass

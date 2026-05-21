@@ -1,4 +1,4 @@
-from app.data.kabutan_repository import _parse_kabutan_forecast_rows, build_kabutan_forecast_snapshot
+from app.data.kabutan_repository import _parse_kabutan_forecast_rows, build_kabutan_forecast_snapshot, _get_kabutan_header_index
 
 
 def test_parse_kabutan_forecast_rows_extracts_actual_and_forecast_rows():
@@ -109,3 +109,9 @@ def test_build_kabutan_forecast_snapshot_handles_pre_earnings_layout_for_2026():
     snapshot = build_kabutan_forecast_snapshot(rows, base_year=2026)
     assert [row.year for row in snapshot.actual_rows] == [2024, 2025]
     assert [row.year for row in snapshot.forecast_rows] == [2026, 2027]
+
+
+def test_get_kabutan_header_index_supports_aliases():
+    headers = ["決算期", "売上高", "修正1株益", "修正1株配"]
+    assert _get_kabutan_header_index(headers, "revised_eps") == 2
+    assert _get_kabutan_header_index(headers, "dividend") == 3

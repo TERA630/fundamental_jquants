@@ -167,14 +167,14 @@
 - `app/presenters.py`
   - watchlistのファイル読込・正規表現パース責務を削除し、出力整形（`build_*`）責務に限定する。
 - `app/domain/usecases/fundamental_analysis.py`
-  - `allow_kabutan_web_fallback=True` のとき、HTML未設定・HTML読込失敗時に `fetch_kabutan_forecast_pair` へフォールバックする。
-  - Web取得失敗時は `KabutanFetchResult(source="none", message="Web取得失敗: ...")` を返す。
+  - 株探データ取得はローカルHTMLのみを対象とし、直接Web取得は行わない。
+  - HTML未設定・HTML読込失敗時は `KabutanFetchResult(source="none", message=...)` を返す。
 
 ### 進行状況（2026-05-21）
 - [x] A-1 GUI Controller依存先の実体モジュール化
 - [x] A-2 watchlist責務のData層集約（Presenterから削除）
-- [x] A-3 `allow_kabutan_web_fallback` の実動化
-- [x] A-4 回帰テスト追加（usecaseのweb fallback有効/無効）
+- [x] A-3 株探はローカルHTML専用（直接Web取得を無効化）
+- [x] A-4 回帰テスト更新（HTML未設定時は `source=none`）
 
 
 ## 変更優先度の判断（表示情報密度を上げる前に何をするべきか）

@@ -33,15 +33,39 @@ def test_fetch_kabutan_forecast_pair_uses_cache(tmp_path: Path):
     assert repo.calls == 1
 
 
+def test_fetch_kabutan_forecast_pair_restores_eps_and_dividend_from_cache(tmp_path: Path):
+    html = """
+    <div class="fin_year_result_d"><table><tbody>
+      <tr><th>決算期</th><th>売上高</th><th>営業益</th><th>経常益</th><th>最終益</th><th>修正1株益</th><th>配当</th></tr>
+      <tr><th>2025.03</th><td>1,000</td><td>100</td><td>90</td><td>80</td><td>50.5</td><td>20.0</td></tr>
+      <tr><th>2026.03予</th><td>1,200</td><td>130</td><td>120</td><td>110</td><td>65.2</td><td>24.0</td></tr>
+      <tr><th>2027.03予</th><td>1,350</td><td>150</td><td>140</td><td>120</td><td>70.1</td><td>26.0</td></tr>
+    </tbody></table></div>
+    """
+    repo = DummyKabutanForecastRepository(html=html, file_cache=FileCache(base_dir=tmp_path / "cache"))
+
+    first = repo.fetch_kabutan_forecast_pair("7203")
+    second = repo.fetch_kabutan_forecast_pair("7203")
+
+    assert first.current_forecast.revised_eps == 65.2
+    assert first.current_forecast.dividend == 24.0
+    assert second.current_forecast.revised_eps == 65.2
+    assert second.current_forecast.dividend == 24.0
+    assert second.next_forecast is not None
+    assert second.next_forecast.revised_eps == 70.1
+    assert second.next_forecast.dividend == 26.0
+    assert repo.calls == 1
+
+
 def test_fetch_kabutan_html_from_file_uses_cache(tmp_path: Path):
     cache = FileCache(base_dir=tmp_path / "cache")
     repo = KabutanForecastRepository(file_cache=cache)
     path = tmp_path / "kabutan_saved.html"
-    path.write_text('<html><body><div class="fin_year_result_d">v1</div><div>noise</div></body></html>', encoding="utf-8")
+    path.write_text('<html><body><div class="fin_year_result_d"><table><tbody><tr><th>2026.03予</th><td>1</td><td>2</td><td>3</td><td>4</td></tr></tbody></table></div><div>noise</div></body></html>', encoding="utf-8")
 
     first = repo.fetch_kabutan_html_from_file(path)
-    path.write_text('<html><body><div class="fin_year_result_d">v2</div></body></html>', encoding="utf-8")
+    path.write_text('<html><body><div class="fin_year_result_d"><table><tbody><tr><th>2027.03予</th><td>9</td><td>9</td><td>9</td><td>9</td></tr></tbody></table></div></body></html>', encoding="utf-8")
     second = repo.fetch_kabutan_html_from_file(path)
 
-    assert first == '<div class="fin_year_result_d">v1</div>'
-    assert second == '<div class="fin_year_result_d">v1</div>'
+    assert '2026.03予' in first
+    assert '2027.03予' not in second

@@ -37,11 +37,11 @@ def test_fetch_kabutan_html_from_file_uses_cache(tmp_path: Path):
     cache = FileCache(base_dir=tmp_path / "cache")
     repo = KabutanForecastRepository(file_cache=cache)
     path = tmp_path / "kabutan_saved.html"
-    path.write_text("<html>v1</html>", encoding="utf-8")
+    path.write_text('<html><body><div class="fin_year_result_d">v1</div><div>noise</div></body></html>', encoding="utf-8")
 
     first = repo.fetch_kabutan_html_from_file(path)
-    path.write_text("<html>v2</html>", encoding="utf-8")
+    path.write_text('<html><body><div class="fin_year_result_d">v2</div></body></html>', encoding="utf-8")
     second = repo.fetch_kabutan_html_from_file(path)
 
-    assert first == "<html>v1</html>"
-    assert second == "<html>v1</html>"
+    assert first == '<div class="fin_year_result_d">v1</div>'
+    assert second == '<div class="fin_year_result_d">v1</div>'

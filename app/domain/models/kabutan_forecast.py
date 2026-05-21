@@ -15,6 +15,14 @@ class KabutanForecastRow:
     operating_profit: int | None
     ordinary_profit: int | None
     final_profit: int | None
+    revised_eps: float | None = None
+    dividend: float | None = None
+
+
+@dataclass(frozen=True)
+class KabutanForecastSnapshot:
+    actual_rows: tuple[KabutanForecastRow, ...]
+    forecast_rows: tuple[KabutanForecastRow, ...]
 
 
 @dataclass(frozen=True)
@@ -24,4 +32,4 @@ class KabutanForecastPair:
     next_forecast: KabutanForecastRow | None
 
 
-__all__ = ["KabutanForecastRow", "KabutanForecastPair"]
+__all__ = ["KabutanForecastRow", "KabutanForecastPair", "KabutanForecastSnapshot"]

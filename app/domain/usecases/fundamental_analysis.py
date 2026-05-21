@@ -125,27 +125,21 @@ class FundamentalAnalysisService:
     def fetch_kabutan_forecast_pair(
         self, code4: str, html_dir: Path | None = None, allow_kabutan_web_fallback: bool = True
     ) -> KabutanFetchResult:
-        if html_dir is not None:
-            html_candidates = self._build_kabutan_html_candidates(code4=code4, html_dir=html_dir)
-            for html_path in html_candidates:
-                if html_path.exists():
-                    try:
-                        repository = self.kabutan_usecase.repository
-                        return KabutanFetchResult(pair=repository.fetch_kabutan_forecast_pair_from_file(html_path), source="html")
-                    except Exception:
-                        continue
-            if html_candidates and not allow_kabutan_web_fallback:
-                return KabutanFetchResult(pair=None, source="none", message="HTML解析に失敗（Webフォールバック無効）")
-            if not allow_kabutan_web_fallback:
-                return KabutanFetchResult(pair=None, source="none", message="HTMLファイル未検出（Webフォールバック無効）")
-        if allow_kabutan_web_fallback:
-            try:
-                pair = self.kabutan_usecase.get_kabutan_forecast_pair(code4)
-                source_msg = "HTML失敗のためWeb取得" if html_dir is not None else None
-                return KabutanFetchResult(pair=pair, source="web", message=source_msg)
-            except Exception:
-                return KabutanFetchResult(pair=None, source="none", message="Web取得に失敗")
-        return KabutanFetchResult(pair=None, source="none", message="株探データ取得を実行しませんでした")
+        if html_dir is None:
+            return KabutanFetchResult(pair=None, source="none", message="HTMLフォルダ未設定")
+
+        html_candidates = self._build_kabutan_html_candidates(code4=code4, html_dir=html_dir)
+        for html_path in html_candidates:
+            if html_path.exists():
+                try:
+                    repository = self.kabutan_usecase.repository
+                    return KabutanFetchResult(pair=repository.fetch_kabutan_forecast_pair_from_file(html_path), source="html")
+                except Exception:
+                    continue
+
+        if html_candidates:
+            return KabutanFetchResult(pair=None, source="none", message="HTML解析に失敗")
+        return KabutanFetchResult(pair=None, source="none", message="HTMLファイル未検出")
 
     @staticmethod
     def _build_kabutan_html_candidates(code4: str, html_dir: Path) -> list[Path]:

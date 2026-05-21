@@ -22,4 +22,8 @@ def test_build_kabutan_forecast_output_renders_na_rows_when_none():
     text = build_kabutan_forecast_output("base output", None, "none", "HTML解析に失敗")
     assert "■株探 業績推移（通期）" in text
     assert "株探ソース: 取得不可 (HTML解析に失敗)" in text
+    assert "実績(N/A)" in text
+    assert "今期予想(N/A)" in text
+    assert "来期予想(N/A)" in text
+    assert "2025年" not in text
     assert "N/A" in text

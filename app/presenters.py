@@ -95,6 +95,10 @@ def _build_kabutan_row_line(row: KabutanForecastRow) -> str:
     )
 
 
+def _build_kabutan_na_row_line(label: str) -> str:
+    return f"{label:<10}{'N/A':>10}{'N/A':>10}{'N/A':>10}{'N/A':>10}"
+
+
 def _build_kabutan_source_label(source: str, message: str | None) -> str:
     source_label = {"html": "HTML", "web": "Web", "none": "取得不可"}.get(source, "取得不可")
     return f"株探ソース: {source_label}" if not message else f"株探ソース: {source_label} ({message})"
@@ -114,13 +118,15 @@ def build_kabutan_forecast_output(
             )
             if row is not None
         ]
-    if not rows:
-        rows = [
-            KabutanForecastRow(period_label="2025.03", year=2025, month=3, section="実績", sales=None, operating_profit=None, ordinary_profit=None, final_profit=None),
-            KabutanForecastRow(period_label="2026.03", year=2026, month=3, section="予想", sales=None, operating_profit=None, ordinary_profit=None, final_profit=None),
-            KabutanForecastRow(period_label="2027.03", year=2027, month=3, section="予想", sales=None, operating_profit=None, ordinary_profit=None, final_profit=None),
-        ]
     header = "　　　　　　売上高　　営業利益　　経常利益　　最終利益"
-    row_lines = [_build_kabutan_row_line(row) for row in rows]
+    row_lines = (
+        [_build_kabutan_row_line(row) for row in rows]
+        if rows
+        else [
+            _build_kabutan_na_row_line("実績(N/A)"),
+            _build_kabutan_na_row_line("今期予想(N/A)"),
+            _build_kabutan_na_row_line("来期予想(N/A)"),
+        ]
+    )
     section = "\n".join(["", "■株探 業績推移（通期）", _build_kabutan_source_label(kabutan_source, kabutan_source_message), header, *row_lines])
     return f"{base_output}\n{section}"

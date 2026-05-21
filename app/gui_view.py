@@ -9,14 +9,25 @@ from tkinter import ttk
 class FundamentalView:
     """Widget構築と表示更新を担当するView。"""
 
-    def __init__(self, master: tk.Tk, api_key_var: tk.StringVar, path_var: tk.StringVar, stock_var: tk.StringVar, status_var: tk.StringVar):
+    def __init__(
+        self,
+        master: tk.Tk,
+        api_key_var: tk.StringVar,
+        path_var: tk.StringVar,
+        stock_var: tk.StringVar,
+        status_var: tk.StringVar,
+        kabutan_dir_var: tk.StringVar,
+        allow_kabutan_web_fallback_var: tk.BooleanVar,
+    ):
         self.master = master
         self.api_key_var = api_key_var
         self.path_var = path_var
         self.stock_var = stock_var
         self.status_var = status_var
+        self.kabutan_dir_var = kabutan_dir_var
+        self.allow_kabutan_web_fallback_var = allow_kabutan_web_fallback_var
 
-    def build_ui(self, *, on_open, on_select, on_fetch, on_copy, on_save) -> None:
+    def build_ui(self, *, on_open, on_select, on_fetch, on_copy, on_save, on_open_kabutan_dir) -> None:
         root = ttk.Frame(self.master, padding=10)
         root.pack(fill="both", expand=True)
 
@@ -32,6 +43,18 @@ class FundamentalView:
         self.open_button = ttk.Button(top, text="監視銘柄ファイルを開く", command=on_open)
         self.open_button.pack(side="left")
         ttk.Label(top, textvariable=self.path_var).pack(side="left", padx=10, fill="x", expand=True)
+
+        kabutan_top = ttk.Frame(root)
+        kabutan_top.pack(fill="x", pady=(0, 8))
+        self.open_kabutan_dir_button = ttk.Button(kabutan_top, text="株探HTMLフォルダを選択", command=on_open_kabutan_dir)
+        self.open_kabutan_dir_button.pack(side="left")
+        ttk.Label(kabutan_top, textvariable=self.kabutan_dir_var).pack(side="left", padx=10, fill="x", expand=True)
+        self.allow_kabutan_web_checkbox = ttk.Checkbutton(
+            kabutan_top,
+            text="株探Web自動取得を許可",
+            variable=self.allow_kabutan_web_fallback_var,
+        )
+        self.allow_kabutan_web_checkbox.pack(side="left")
 
         control = ttk.Frame(root)
         control.pack(fill="x", pady=(0, 8))
@@ -64,7 +87,9 @@ class FundamentalView:
         state = "disabled" if busy else "normal"
         readonly_state = "disabled" if busy else "readonly"
         self.open_button.configure(state=state)
+        self.open_kabutan_dir_button.configure(state=state)
         self.fetch_button.configure(state=state)
+        self.allow_kabutan_web_checkbox.configure(state=state)
         self.copy_button.configure(state=state)
         self.save_button.configure(state=state)
         self.api_entry.configure(state=state)

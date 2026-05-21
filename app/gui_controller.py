@@ -22,14 +22,30 @@ class FundamentalGuiController:
         normalized_api_key = raw_api_key.strip()
         return normalized_api_key or None
 
-    def fetch_analysis_output(self, *, api_key: str, name: str, code4: str, output_cache: dict[str, str]) -> str:
-        cached_output = output_cache.get(code4)
+    def fetch_analysis_output(
+        self,
+        *,
+        api_key: str,
+        name: str,
+        code4: str,
+        output_cache: dict[str, str],
+        output_cache_key: str,
+        kabutan_html_dir: Path | None = None,
+        allow_kabutan_web_fallback: bool = True,
+    ) -> str:
+        cached_output = output_cache.get(output_cache_key)
         if cached_output is not None:
             return cached_output
 
         service = FundamentalAnalysisService(api_key=api_key, file_cache=self.file_cache)
-        output = service.build_analysis_output(name, code4, build_output_fn=build_fundamental_output)
-        output_cache[code4] = output
+        output = service.build_analysis_output(
+            name,
+            code4,
+            build_output_fn=build_fundamental_output,
+            kabutan_html_dir=kabutan_html_dir,
+            allow_kabutan_web_fallback=allow_kabutan_web_fallback,
+        )
+        output_cache[output_cache_key] = output
         return output
 
 

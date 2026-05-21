@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from app.domain.builders.fundamental_output import build_fundamental_output_text
+from app.domain.models.kabutan_forecast import KabutanForecastPair, KabutanForecastRow
 
 
 def fetch_watchlist(path: Path) -> list[tuple[str, str]]:
@@ -61,9 +62,12 @@ def build_fundamental_output(
     summary_rows: list[dict[str, Any]],
     price: float | None,
     market_cap: float | None,
+    kabutan_forecast_pair: KabutanForecastPair | None = None,
+    kabutan_source: str = "none",
+    kabutan_source_message: str | None = None,
 ) -> str:
     """ドメイン層の出力生成ビルダーを呼び出す。"""
-    return build_fundamental_output_text(
+    base_output = build_fundamental_output_text(
         name=name,
         code4=code4,
         master=master,
@@ -71,3 +75,52 @@ def build_fundamental_output(
         price=price,
         market_cap=market_cap,
     )
+    return build_kabutan_forecast_output(base_output, kabutan_forecast_pair, kabutan_source, kabutan_source_message)
+
+
+def _fmt_oku(value: int | None) -> str:
+    if value is None:
+        return "N/A"
+    return f"{value / 100:,.1f}億"
+
+
+def _build_kabutan_row_line(row: KabutanForecastRow) -> str:
+    year_label = f"{row.year}年(予)" if row.section == "予想" else f"{row.year}年"
+    return (
+        f"{year_label:<10}"
+        f"{_fmt_oku(row.sales):>10}"
+        f"{_fmt_oku(row.operating_profit):>10}"
+        f"{_fmt_oku(row.ordinary_profit):>10}"
+        f"{_fmt_oku(row.final_profit):>10}"
+    )
+
+
+def _build_kabutan_source_label(source: str, message: str | None) -> str:
+    source_label = {"html": "HTML", "web": "Web", "none": "取得不可"}.get(source, "取得不可")
+    return f"株探ソース: {source_label}" if not message else f"株探ソース: {source_label} ({message})"
+
+
+def build_kabutan_forecast_output(
+    base_output: str, kabutan_forecast_pair: KabutanForecastPair | None, kabutan_source: str, kabutan_source_message: str | None
+) -> str:
+    rows: list[KabutanForecastRow] = []
+    if kabutan_forecast_pair is not None:
+        rows = [
+            row
+            for row in (
+                kabutan_forecast_pair.previous_actual,
+                kabutan_forecast_pair.current_forecast,
+                kabutan_forecast_pair.next_forecast,
+            )
+            if row is not None
+        ]
+    if not rows:
+        rows = [
+            KabutanForecastRow(period_label="2025.03", year=2025, month=3, section="実績", sales=None, operating_profit=None, ordinary_profit=None, final_profit=None),
+            KabutanForecastRow(period_label="2026.03", year=2026, month=3, section="予想", sales=None, operating_profit=None, ordinary_profit=None, final_profit=None),
+            KabutanForecastRow(period_label="2027.03", year=2027, month=3, section="予想", sales=None, operating_profit=None, ordinary_profit=None, final_profit=None),
+        ]
+    header = "　　　　　　売上高　　営業利益　　経常利益　　最終利益"
+    row_lines = [_build_kabutan_row_line(row) for row in rows]
+    section = "\n".join(["", "■株探 業績推移（通期）", _build_kabutan_source_label(kabutan_source, kabutan_source_message), header, *row_lines])
+    return f"{base_output}\n{section}"

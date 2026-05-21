@@ -29,10 +29,11 @@ class FundamentalGuiController:
         name: str,
         code4: str,
         output_cache: dict[str, str],
+        output_cache_key: str,
         kabutan_html_dir: Path | None = None,
         allow_kabutan_web_fallback: bool = True,
     ) -> str:
-        cached_output = output_cache.get(code4)
+        cached_output = output_cache.get(output_cache_key)
         if cached_output is not None:
             return cached_output
 
@@ -44,7 +45,7 @@ class FundamentalGuiController:
             kabutan_html_dir=kabutan_html_dir,
             allow_kabutan_web_fallback=allow_kabutan_web_fallback,
         )
-        output_cache[code4] = output
+        output_cache[output_cache_key] = output
         return output
 
 

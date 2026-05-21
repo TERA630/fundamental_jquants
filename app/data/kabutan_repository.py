@@ -11,6 +11,12 @@ from app.data.file_cache import FileCache
 from app.domain.models.kabutan_forecast import KabutanForecastPair, KabutanForecastRow, KabutanForecastSnapshot
 
 
+KABUTAN_HEADER_ALIASES = {
+    "revised_eps": ("1株益",),
+    "dividend": ("配当", "1株配"),
+}
+
+
 def _to_int(text: str) -> int | None:
     normalized = text.replace(",", "").replace("－", "").strip()
     return int(normalized) if normalized else None
@@ -37,7 +43,7 @@ def _clean_cell_text(text: str) -> str:
     return re.sub(r"\s+", " ", unescape(text_no_tags)).strip()
 
 
-def _parse_kabutan_forecast_rows(html: str) -> list[KabutanForecastRow]:
+def _fetch_kabutan_table_html(html: str) -> str:
     table_match = re.search(
         r'<div[^>]*class="[^"]*fin_year_result_d[^"]*"[^>]*>[\s\S]*?<table[^>]*>([\s\S]*?)</table>',
         html,
@@ -45,8 +51,16 @@ def _parse_kabutan_forecast_rows(html: str) -> list[KabutanForecastRow]:
     )
     if table_match is None:
         raise ValueError("通期・業績推移テーブルが見つかりません")
+    return table_match.group(1)
 
-    block = table_match.group(1)
+
+def _get_kabutan_header_index(header_cells: list[str], metric_key: str) -> int | None:
+    aliases = KABUTAN_HEADER_ALIASES.get(metric_key, ())
+    return next((idx for idx, col in enumerate(header_cells) if any(alias in col for alias in aliases)), None)
+
+
+def _parse_kabutan_forecast_rows(html: str) -> list[KabutanForecastRow]:
+    block = _fetch_kabutan_table_html(html)
     rows: list[KabutanForecastRow] = []
     header_cells: list[str] = []
     for row_html in re.findall(r"<tr[^>]*>(.*?)</tr>", block, flags=re.DOTALL):
@@ -62,8 +76,8 @@ def _parse_kabutan_forecast_rows(html: str) -> list[KabutanForecastRow]:
             continue
         period_label, year, month = parsed_period
         heading = cleaned_cells[0]
-        revised_eps_idx = next((idx for idx, col in enumerate(header_cells) if "1株益" in col), None)
-        dividend_idx = next((idx for idx, col in enumerate(header_cells) if "配当" in col or "1株配" in col), None)
+        revised_eps_idx = _get_kabutan_header_index(header_cells, "revised_eps")
+        dividend_idx = _get_kabutan_header_index(header_cells, "dividend")
         rows.append(
             KabutanForecastRow(
                 period_label=period_label,

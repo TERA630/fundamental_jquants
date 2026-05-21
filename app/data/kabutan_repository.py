@@ -103,6 +103,22 @@ def build_kabutan_forecast_row_from_cache(cache_row: KabutanCacheRow) -> Kabutan
     )
 
 
+def fetch_kabutan_forecast_rows_from_cache_payload(cached_payload: dict[str, object]) -> list[KabutanForecastRow]:
+    rows = cached_payload.get("rows")
+    if not isinstance(rows, list) or not rows:
+        return []
+
+    parsed_rows: list[KabutanForecastRow] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        try:
+            parsed_rows.append(build_kabutan_forecast_row_from_cache(row))
+        except (KeyError, ValueError, TypeError):
+            continue
+    return parsed_rows
+
+
 def _parse_kabutan_forecast_rows(html: str) -> list[KabutanForecastRow]:
     block = _fetch_kabutan_table_html(html)
     rows: list[KabutanForecastRow] = []
@@ -236,13 +252,12 @@ class KabutanForecastRepository:
         cache_key = self.build_cache_key_kabutan_forecast(code)
         cached_payload = self.file_cache.get(cache_key, ttl_sec=12 * 60 * 60)
         if isinstance(cached_payload, dict):
-            try:
-                rows = cached_payload.get("rows")
-                if isinstance(rows, list) and rows:
-                    parsed_rows = [build_kabutan_forecast_row_from_cache(row) for row in rows if isinstance(row, dict)]
+            parsed_rows = fetch_kabutan_forecast_rows_from_cache_payload(cached_payload)
+            if parsed_rows:
+                try:
                     return _build_forecast_pair_from_rows(parsed_rows, target_years=target_years)
-            except Exception:
-                pass
+                except ValueError:
+                    pass
 
         html = self.fetch_kabutan_html(code)
         pair = self._fetch_forecast_pair_from_html(html, target_years=target_years)

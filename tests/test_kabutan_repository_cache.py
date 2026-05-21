@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from app.data.file_cache import FileCache
-from app.data.kabutan_repository import KabutanForecastRepository
+from app.data.kabutan_repository import KabutanForecastRepository, fetch_kabutan_forecast_rows_from_cache_payload
 
 
 class DummyKabutanForecastRepository(KabutanForecastRepository):
@@ -69,3 +69,19 @@ def test_fetch_kabutan_html_from_file_uses_cache(tmp_path: Path):
 
     assert '2026.03予' in first
     assert '2027.03予' not in second
+
+
+def test_fetch_kabutan_forecast_rows_from_cache_payload_skips_invalid_rows():
+    payload = {
+        "rows": [
+            {"fiscal_year": "2026/03", "forecast_type": "予想", "period_type": "通期", "sales": 1200, "op_income": 130, "ordinary_income": 120, "np": 110, "eps": 65.2, "div": 24.0},
+            {"fiscal_year": "broken", "forecast_type": "予想", "period_type": "通期"},
+            "invalid-row",
+        ]
+    }
+
+    rows = fetch_kabutan_forecast_rows_from_cache_payload(payload)
+
+    assert len(rows) == 1
+    assert rows[0].year == 2026
+    assert rows[0].revised_eps == 65.2

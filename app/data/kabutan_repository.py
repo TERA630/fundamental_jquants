@@ -176,8 +176,8 @@ class KabutanForecastRepository:
                     "op_income": row.operating_profit,
                     "ordinary_income": row.ordinary_profit,
                     "np": row.final_profit,
-                    "eps": None,
-                    "div": None,
+                    "eps": row.revised_eps,
+                    "div": row.dividend,
                 }
             )
         return {"rows": rows}
@@ -203,6 +203,8 @@ class KabutanForecastRepository:
                             operating_profit=row.get("op_income"),
                             ordinary_profit=row.get("ordinary_income"),
                             final_profit=row.get("np"),
+                            revised_eps=row.get("eps"),
+                            dividend=row.get("div"),
                         )
                         for row in rows
                     ]

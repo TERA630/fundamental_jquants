@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.presenters import build_fundamental_output, fetch_watchlist
-from app.repositories import FileCache
-from app.services import FundamentalAnalysisService
+from app.data.file_cache import FileCache
+from app.data.watchlist_repository import fetch_watchlist_entries
+from app.domain.usecases.fundamental_analysis import FundamentalAnalysisService
+from app.presenters import build_fundamental_output
 
 
 class FundamentalGuiController:
@@ -16,7 +17,7 @@ class FundamentalGuiController:
         self.file_cache = file_cache or FileCache()
 
     def fetch_watchlist_entries(self, path: Path) -> list[tuple[str, str]]:
-        return fetch_watchlist(path)
+        return fetch_watchlist_entries(path)
 
     def fetch_api_key(self, raw_api_key: str) -> str | None:
         normalized_api_key = raw_api_key.strip()

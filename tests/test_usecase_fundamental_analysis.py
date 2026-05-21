@@ -41,6 +41,7 @@ def _install_stub_modules() -> None:
 _install_stub_modules()
 
 from app.domain.usecases.fundamental_analysis import FundamentalAnalysisService
+from app.domain.models.kabutan_forecast import KabutanForecastPair, KabutanForecastRow
 
 
 class InMemoryCache:
@@ -137,6 +138,54 @@ class TestFundamentalAnalysisService(unittest.TestCase):
         self.assertEqual(snap1, {"price": None, "market_cap": None})
         self.assertEqual(snap2, {"price": None, "market_cap": None})
         self.assertEqual(market.calls, 2)
+
+    def test_fetch_kabutan_forecast_pair_falls_back_to_web_when_html_dir_is_none(self):
+        class FakeKabutanRepository:
+            def fetch_kabutan_forecast_pair(self, _code, target_years=None):
+                return KabutanForecastPair(
+                    previous_actual=KabutanForecastRow("2024.03", 2024, 3, "実績", 1000, 100, 90, 80, 50.0, 20.0),
+                    current_forecast=KabutanForecastRow("2025.03", 2025, 3, "予想", 1100, 120, 100, 90, 55.0, 22.0),
+                    next_forecast=None,
+                )
+
+            def fetch_kabutan_forecast_pair_from_file(self, _html_path, target_years=None):
+                raise AssertionError("HTMLフォールバックは呼ばれない想定")
+
+        class FakeKabutanUseCase:
+            def __init__(self, repository):
+                self.repository = repository
+
+        service = FundamentalAnalysisService(
+            api_key="dummy",
+            file_cache=InMemoryCache(),
+            client=FakeClient(),
+            fetch_market_snapshot=FakeMarketProvider(),
+            kabutan_usecase=FakeKabutanUseCase(FakeKabutanRepository()),
+        )
+
+        result = service.fetch_kabutan_forecast_pair("8058", html_dir=None, allow_kabutan_web_fallback=True)
+
+        self.assertEqual(result.source, "web")
+        self.assertIsNotNone(result.pair)
+
+    def test_fetch_kabutan_forecast_pair_returns_none_when_fallback_disabled(self):
+        class FakeKabutanUseCase:
+            def __init__(self):
+                self.repository = object()
+
+        service = FundamentalAnalysisService(
+            api_key="dummy",
+            file_cache=InMemoryCache(),
+            client=FakeClient(),
+            fetch_market_snapshot=FakeMarketProvider(),
+            kabutan_usecase=FakeKabutanUseCase(),
+        )
+
+        result = service.fetch_kabutan_forecast_pair("8058", html_dir=None, allow_kabutan_web_fallback=False)
+
+        self.assertEqual(result.source, "none")
+        self.assertEqual(result.message, "HTMLフォルダ未設定")
+        self.assertIsNone(result.pair)
 
 
 if __name__ == "__main__":

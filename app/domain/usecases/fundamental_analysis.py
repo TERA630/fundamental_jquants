@@ -29,6 +29,13 @@ class MarketDataProviderPort(Protocol):
     def __call__(self, code4: str) -> dict[str, float | None]: ...
 
 
+class KabutanForecastRepositoryPort(Protocol):
+    def fetch_kabutan_forecast_pair(self, code: str, target_years: tuple[int, int] | None = None) -> KabutanForecastPair: ...
+    def fetch_kabutan_forecast_pair_from_file(
+        self, html_path: str | Path, target_years: tuple[int, int] | None = None
+    ) -> KabutanForecastPair: ...
+
+
 @dataclass(frozen=True)
 class KabutanFetchResult:
     pair: KabutanForecastPair | None
@@ -125,21 +132,32 @@ class FundamentalAnalysisService:
     def fetch_kabutan_forecast_pair(
         self, code4: str, html_dir: Path | None = None, allow_kabutan_web_fallback: bool = True
     ) -> KabutanFetchResult:
+        repository: KabutanForecastRepositoryPort = self.kabutan_usecase.repository
         if html_dir is None:
+            if allow_kabutan_web_fallback:
+                return self._fetch_kabutan_forecast_pair_from_web(repository, code4)
             return KabutanFetchResult(pair=None, source="none", message="HTMLフォルダ未設定")
 
         html_candidates = self._build_kabutan_html_candidates(code4=code4, html_dir=html_dir)
         for html_path in html_candidates:
             if html_path.exists():
                 try:
-                    repository = self.kabutan_usecase.repository
                     return KabutanFetchResult(pair=repository.fetch_kabutan_forecast_pair_from_file(html_path), source="html")
                 except Exception:
                     continue
 
+        if allow_kabutan_web_fallback:
+            return self._fetch_kabutan_forecast_pair_from_web(repository, code4)
         if html_candidates:
             return KabutanFetchResult(pair=None, source="none", message="HTML解析に失敗")
         return KabutanFetchResult(pair=None, source="none", message="HTMLファイル未検出")
+
+    @staticmethod
+    def _fetch_kabutan_forecast_pair_from_web(repository: KabutanForecastRepositoryPort, code4: str) -> KabutanFetchResult:
+        try:
+            return KabutanFetchResult(pair=repository.fetch_kabutan_forecast_pair(code4), source="web")
+        except Exception as exc:
+            return KabutanFetchResult(pair=None, source="none", message=f"Web取得失敗: {exc}")
 
     @staticmethod
     def _build_kabutan_html_candidates(code4: str, html_dir: Path) -> list[Path]:

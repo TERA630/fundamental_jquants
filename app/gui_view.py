@@ -17,7 +17,6 @@ class FundamentalView:
         stock_var: tk.StringVar,
         status_var: tk.StringVar,
         kabutan_dir_var: tk.StringVar,
-        allow_kabutan_web_fallback_var: tk.BooleanVar,
     ):
         self.master = master
         self.api_key_var = api_key_var
@@ -25,7 +24,6 @@ class FundamentalView:
         self.stock_var = stock_var
         self.status_var = status_var
         self.kabutan_dir_var = kabutan_dir_var
-        self.allow_kabutan_web_fallback_var = allow_kabutan_web_fallback_var
 
     def build_ui(self, *, on_open, on_select, on_fetch, on_copy, on_save, on_open_kabutan_dir) -> None:
         root = ttk.Frame(self.master, padding=10)
@@ -49,12 +47,6 @@ class FundamentalView:
         self.open_kabutan_dir_button = ttk.Button(kabutan_top, text="株探HTMLフォルダを選択", command=on_open_kabutan_dir)
         self.open_kabutan_dir_button.pack(side="left")
         ttk.Label(kabutan_top, textvariable=self.kabutan_dir_var).pack(side="left", padx=10, fill="x", expand=True)
-        self.allow_kabutan_web_checkbox = ttk.Checkbutton(
-            kabutan_top,
-            text="株探Web自動取得を許可",
-            variable=self.allow_kabutan_web_fallback_var,
-        )
-        self.allow_kabutan_web_checkbox.pack(side="left")
 
         control = ttk.Frame(root)
         control.pack(fill="x", pady=(0, 8))
@@ -89,7 +81,6 @@ class FundamentalView:
         self.open_button.configure(state=state)
         self.open_kabutan_dir_button.configure(state=state)
         self.fetch_button.configure(state=state)
-        self.allow_kabutan_web_checkbox.configure(state=state)
         self.copy_button.configure(state=state)
         self.save_button.configure(state=state)
         self.api_entry.configure(state=state)

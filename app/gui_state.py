@@ -12,7 +12,6 @@ class GuiState:
 
     watchlist_path: Path | None = None
     kabutan_html_dir: Path | None = None
-    allow_kabutan_web_fallback: bool = True
     watchlist: list[tuple[str, str]] = field(default_factory=list)
     display_to_code: dict[str, tuple[str, str]] = field(default_factory=dict)
     output_cache: dict[str, str] = field(default_factory=dict)
@@ -43,10 +42,9 @@ def build_default_output_filename(selected: tuple[str, str] | None) -> str:
     return f"stock_fundamental_prompt_{code}.txt"
 
 
-def build_output_cache_key(code4: str, kabutan_html_dir: Path | None, allow_kabutan_web_fallback: bool) -> str:
+def build_output_cache_key(code4: str, kabutan_html_dir: Path | None) -> str:
     dir_part = str(kabutan_html_dir.resolve()) if kabutan_html_dir is not None else "-"
-    fallback_part = "web_on" if allow_kabutan_web_fallback else "web_off"
-    return f"{code4}|{dir_part}|{fallback_part}"
+    return f"{code4}|{dir_part}"
 
 
 __all__ = [

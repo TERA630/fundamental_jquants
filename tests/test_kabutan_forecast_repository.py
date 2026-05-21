@@ -1,4 +1,4 @@
-from app.data.kabutan_repository import _parse_kabutan_forecast_rows
+from app.data.kabutan_repository import _parse_kabutan_forecast_rows, build_kabutan_forecast_snapshot
 
 
 def test_parse_kabutan_forecast_rows_extracts_actual_and_forecast_rows():
@@ -22,3 +22,51 @@ def test_parse_kabutan_forecast_rows_extracts_actual_and_forecast_rows():
     assert rows[1].year == 2026
     assert rows[1].sales == 1200
     assert rows[2].year == 2027
+
+
+def test_parse_kabutan_forecast_rows_extracts_eps_and_dividend_by_header():
+    html = """
+    <div class="fin_year_result_d">
+      <table>
+        <tbody>
+          <tr><th>決算期</th><th>売上高</th><th>営業益</th><th>経常益</th><th>最終益</th><th>修正1株益</th><th>配当</th></tr>
+          <tr><th>2026.03予</th><td>1,200</td><td>130</td><td>120</td><td>110</td><td>65.2</td><td>24.0</td></tr>
+        </tbody>
+      </table>
+    </div>
+    """
+    rows = _parse_kabutan_forecast_rows(html)
+    assert rows[0].revised_eps == 65.2
+    assert rows[0].dividend == 24.0
+
+
+def test_build_kabutan_forecast_snapshot_handles_post_earnings_layout_for_2026():
+    rows = _parse_kabutan_forecast_rows(
+        """
+        <div class="fin_year_result_d"><table><tbody>
+          <tr><th>2024.03</th><td>1000</td><td>100</td><td>95</td><td>70</td></tr>
+          <tr><th>2025.03</th><td>1100</td><td>110</td><td>105</td><td>75</td></tr>
+          <tr><th>2026.03</th><td>1200</td><td>130</td><td>120</td><td>90</td></tr>
+          <tr><th>2027.03予</th><td>1300</td><td>140</td><td>130</td><td>95</td></tr>
+        </tbody></table></div>
+        """
+    )
+    snapshot = build_kabutan_forecast_snapshot(rows, base_year=2026)
+    assert [row.year for row in snapshot.actual_rows] == [2024, 2025, 2026]
+    assert [row.year for row in snapshot.forecast_rows] == [2027]
+
+
+def test_build_kabutan_forecast_snapshot_handles_pre_earnings_layout_for_2026():
+    rows = _parse_kabutan_forecast_rows(
+        """
+        <div class="fin_year_result_d"><table><tbody>
+          <tr><th>2024.03</th><td>1000</td><td>100</td><td>95</td><td>70</td></tr>
+          <tr><th>2025.03</th><td>1100</td><td>110</td><td>105</td><td>75</td></tr>
+          <tr><th>2026.03予</th><td>1200</td><td>130</td><td>120</td><td>90</td></tr>
+          <tr><th>2027.03予</th><td>1300</td><td>140</td><td>130</td><td>95</td></tr>
+        </tbody></table></div>
+        """
+    )
+    snapshot = build_kabutan_forecast_snapshot(rows, base_year=2026)
+    assert [row.year for row in snapshot.actual_rows] == [2024, 2025]
+    assert [row.year for row in snapshot.forecast_rows] == [2026, 2027]

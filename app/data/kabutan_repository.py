@@ -8,12 +8,17 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 from app.data.file_cache import FileCache
-from app.domain.models.kabutan_forecast import KabutanForecastPair, KabutanForecastRow
+from app.domain.models.kabutan_forecast import KabutanForecastPair, KabutanForecastRow, KabutanForecastSnapshot
 
 
 def _to_int(text: str) -> int | None:
     normalized = text.replace(",", "").replace("－", "").strip()
     return int(normalized) if normalized else None
+
+
+def _to_float(text: str) -> float | None:
+    normalized = text.replace(",", "").replace("－", "").strip()
+    return float(normalized) if normalized else None
 
 
 def _parse_period(text: str) -> tuple[str, int, int] | None:
@@ -39,28 +44,51 @@ def _parse_kabutan_forecast_rows(html: str) -> list[KabutanForecastRow]:
 
     block = block_match.group(1)
     rows: list[KabutanForecastRow] = []
+    header_cells: list[str] = []
     for row_html in re.findall(r"<tr[^>]*>(.*?)</tr>", block, flags=re.DOTALL):
         cells = re.findall(r"<(?:th|td)[^>]*>(.*?)</(?:th|td)>", row_html, flags=re.DOTALL)
         if len(cells) < 5:
             continue
-        parsed_period = _parse_period(_clean_cell_text(cells[0]))
+        cleaned_cells = [_clean_cell_text(cell) for cell in cells]
+        if "売上高" in "".join(cleaned_cells):
+            header_cells = cleaned_cells
+            continue
+        parsed_period = _parse_period(cleaned_cells[0])
         if parsed_period is None:
             continue
         period_label, year, month = parsed_period
-        heading = _clean_cell_text(cells[0])
+        heading = cleaned_cells[0]
+        revised_eps_idx = next((idx for idx, col in enumerate(header_cells) if "1株益" in col), None)
+        dividend_idx = next((idx for idx, col in enumerate(header_cells) if "配当" in col), None)
         rows.append(
             KabutanForecastRow(
                 period_label=period_label,
                 year=year,
                 month=month,
                 section="予想" if "予" in heading else "実績",
-                sales=_to_int(_clean_cell_text(cells[1])),
-                operating_profit=_to_int(_clean_cell_text(cells[2])),
-                ordinary_profit=_to_int(_clean_cell_text(cells[3])),
-                final_profit=_to_int(_clean_cell_text(cells[4])),
+                sales=_to_int(cleaned_cells[1]),
+                operating_profit=_to_int(cleaned_cells[2]),
+                ordinary_profit=_to_int(cleaned_cells[3]),
+                final_profit=_to_int(cleaned_cells[4]),
+                revised_eps=_to_float(cleaned_cells[revised_eps_idx]) if revised_eps_idx is not None and len(cleaned_cells) > revised_eps_idx else None,
+                dividend=_to_float(cleaned_cells[dividend_idx]) if dividend_idx is not None and len(cleaned_cells) > dividend_idx else None,
             )
         )
     return rows
+
+
+def build_kabutan_forecast_snapshot(rows: list[KabutanForecastRow], base_year: int) -> KabutanForecastSnapshot:
+    has_current_year_actual = any(row.section == "実績" and row.year == base_year for row in rows)
+    if has_current_year_actual:
+        actual_years = {base_year - 2, base_year - 1, base_year}
+        forecast_years = {base_year + 1}
+    else:
+        actual_years = {base_year - 2, base_year - 1}
+        forecast_years = {base_year, base_year + 1}
+
+    actual_rows = tuple(row for row in rows if row.section == "実績" and row.year in actual_years)
+    forecast_rows = tuple(row for row in rows if row.section == "予想" and row.year in forecast_years)
+    return KabutanForecastSnapshot(actual_rows=actual_rows, forecast_rows=forecast_rows)
 
 
 def _extract_kabutan_visible_body(html: str) -> str:

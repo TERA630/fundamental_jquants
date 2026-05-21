@@ -151,6 +151,42 @@
 - `fundamental_jquants_v7.py` 直接参照: 0 箇所
 - ドメイン判定関数テストカバレッジ: 90% 以上
 
+## 優先度Aリファクタ仕様（2026-05-21）
+
+### 対象
+1. GUI Controller の依存先を互換Facadeから実体モジュールへ移行
+2. watchlist読込を Presenter から Data層Repositoryへ集約
+3. `allow_kabutan_web_fallback` の実装整合性を確保
+
+### 具体仕様
+- `app/gui_controller.py`
+  - import先を `app.repositories` / `app.services` から以下へ置換する。
+    - `app.data.file_cache.FileCache`
+    - `app.domain.usecases.fundamental_analysis.FundamentalAnalysisService`
+  - 監視銘柄取得は `app.data.watchlist_repository.fetch_watchlist_entries` を使用する。
+- `app/presenters.py`
+  - watchlistのファイル読込・正規表現パース責務を削除し、出力整形（`build_*`）責務に限定する。
+- `app/domain/usecases/fundamental_analysis.py`
+  - 株探データ取得はローカルHTMLのみを対象とし、直接Web取得は行わない。
+  - HTML未設定・HTML読込失敗時は `KabutanFetchResult(source="none", message=...)` を返す。
+
+### 進行状況（2026-05-21）
+- [x] A-1 GUI Controller依存先の実体モジュール化
+- [x] A-2 watchlist責務のData層集約（Presenterから削除）
+- [x] A-3 株探はローカルHTML専用（直接Web取得を無効化）
+- [x] A-4 回帰テスト更新（HTML未設定時は `source=none`）
+
+## 優先度B/C 追補（2026-05-21）
+
+### 優先度B: 出力ビルダーのドメイン層集約
+- [x] `build_kabutan_forecast_output` を `app/presenters.py` から `app/domain/builders/kabutan_output.py` へ移設。
+- [x] Presenter はドメインビルダー呼び出しのみを担当する薄いアダプタに整理。
+
+### 優先度C: 互換Facade廃止
+- [x] `app/services.py`（domain互換Facade）を削除。
+- [x] `app/repositories.py`（data互換Facade）を削除。
+- [x] 参照箇所がないことを確認（`app.services` / `app.repositories` import は0件）。
+
 
 ## 変更優先度の判断（表示情報密度を上げる前に何をするべきか）
 結論として、**大きな表示仕様変更の前に、最小限のリファクター（特にPhase3の仕上げ）を先に行う方が安全**。

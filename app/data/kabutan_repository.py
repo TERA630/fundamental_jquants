@@ -72,6 +72,36 @@ def _get_kabutan_header_index(header_cells: list[str], metric_key: str) -> int |
     return next((idx for idx, col in enumerate(header_cells) if any(alias in col for alias in aliases)), None)
 
 
+def fetch_kabutan_header_indices(header_cells: list[str]) -> dict[str, int | None]:
+    return {
+        "revised_eps": _get_kabutan_header_index(header_cells, "revised_eps"),
+        "dividend": _get_kabutan_header_index(header_cells, "dividend"),
+    }
+
+
+def build_kabutan_forecast_row_from_cells(cleaned_cells: list[str], header_indices: dict[str, int | None]) -> KabutanForecastRow | None:
+    parsed_period = _parse_period(cleaned_cells[0])
+    if parsed_period is None:
+        return None
+
+    period_label, year, month = parsed_period
+    heading = cleaned_cells[0]
+    revised_eps_idx = header_indices.get("revised_eps")
+    dividend_idx = header_indices.get("dividend")
+    return KabutanForecastRow(
+        period_label=period_label,
+        year=year,
+        month=month,
+        section="予想" if "予" in heading else "実績",
+        sales=_to_int(cleaned_cells[1]),
+        operating_profit=_to_int(cleaned_cells[2]),
+        ordinary_profit=_to_int(cleaned_cells[3]),
+        final_profit=_to_int(cleaned_cells[4]),
+        revised_eps=_to_float(cleaned_cells[revised_eps_idx]) if revised_eps_idx is not None and len(cleaned_cells) > revised_eps_idx else None,
+        dividend=_to_float(cleaned_cells[dividend_idx]) if dividend_idx is not None and len(cleaned_cells) > dividend_idx else None,
+    )
+
+
 def build_kabutan_cache_row(row: KabutanForecastRow) -> KabutanCacheRow:
     return {
         "fiscal_year": f"{row.year}/{row.month:02d}",
@@ -123,6 +153,7 @@ def _parse_kabutan_forecast_rows(html: str) -> list[KabutanForecastRow]:
     block = _fetch_kabutan_table_html(html)
     rows: list[KabutanForecastRow] = []
     header_cells: list[str] = []
+    header_indices = {"revised_eps": None, "dividend": None}
     for row_html in re.findall(r"<tr[^>]*>(.*?)</tr>", block, flags=re.DOTALL):
         cells = re.findall(r"<(?:th|td)[^>]*>(.*?)</(?:th|td)>", row_html, flags=re.DOTALL)
         if len(cells) < 5:
@@ -130,28 +161,11 @@ def _parse_kabutan_forecast_rows(html: str) -> list[KabutanForecastRow]:
         cleaned_cells = [_clean_cell_text(cell) for cell in cells]
         if "売上高" in "".join(cleaned_cells):
             header_cells = cleaned_cells
+            header_indices = fetch_kabutan_header_indices(header_cells)
             continue
-        parsed_period = _parse_period(cleaned_cells[0])
-        if parsed_period is None:
-            continue
-        period_label, year, month = parsed_period
-        heading = cleaned_cells[0]
-        revised_eps_idx = _get_kabutan_header_index(header_cells, "revised_eps")
-        dividend_idx = _get_kabutan_header_index(header_cells, "dividend")
-        rows.append(
-            KabutanForecastRow(
-                period_label=period_label,
-                year=year,
-                month=month,
-                section="予想" if "予" in heading else "実績",
-                sales=_to_int(cleaned_cells[1]),
-                operating_profit=_to_int(cleaned_cells[2]),
-                ordinary_profit=_to_int(cleaned_cells[3]),
-                final_profit=_to_int(cleaned_cells[4]),
-                revised_eps=_to_float(cleaned_cells[revised_eps_idx]) if revised_eps_idx is not None and len(cleaned_cells) > revised_eps_idx else None,
-                dividend=_to_float(cleaned_cells[dividend_idx]) if dividend_idx is not None and len(cleaned_cells) > dividend_idx else None,
-            )
-        )
+        row = build_kabutan_forecast_row_from_cells(cleaned_cells, header_indices)
+        if row is not None:
+            rows.append(row)
     return rows
 
 

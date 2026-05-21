@@ -1,4 +1,9 @@
-from app.data.kabutan_repository import _parse_kabutan_forecast_rows, build_kabutan_forecast_snapshot, _get_kabutan_header_index
+from app.data.kabutan_repository import (
+    _parse_kabutan_forecast_rows,
+    _get_kabutan_header_index,
+    build_kabutan_forecast_snapshot,
+    fetch_kabutan_header_indices,
+)
 
 
 def test_parse_kabutan_forecast_rows_extracts_actual_and_forecast_rows():
@@ -115,3 +120,10 @@ def test_get_kabutan_header_index_supports_aliases():
     headers = ["決算期", "売上高", "修正1株益", "修正1株配"]
     assert _get_kabutan_header_index(headers, "revised_eps") == 2
     assert _get_kabutan_header_index(headers, "dividend") == 3
+
+
+def test_fetch_kabutan_header_indices_builds_index_map():
+    headers = ["決算期", "売上高", "営業益", "経常益", "最終益", "修正1株益", "配当"]
+    indices = fetch_kabutan_header_indices(headers)
+    assert indices["revised_eps"] == 5
+    assert indices["dividend"] == 6

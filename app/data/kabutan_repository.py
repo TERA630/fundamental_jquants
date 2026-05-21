@@ -38,11 +38,15 @@ def _clean_cell_text(text: str) -> str:
 
 
 def _parse_kabutan_forecast_rows(html: str) -> list[KabutanForecastRow]:
-    block_match = re.search(r'<div[^>]*class="[^"]*fin_year_result_d[^"]*"[^>]*>(.*?)</div>', html, flags=re.DOTALL)
-    if block_match is None:
+    table_match = re.search(
+        r'<div[^>]*class="[^"]*fin_year_result_d[^"]*"[^>]*>[\s\S]*?<table[^>]*>([\s\S]*?)</table>',
+        html,
+        flags=re.DOTALL,
+    )
+    if table_match is None:
         raise ValueError("通期・業績推移テーブルが見つかりません")
 
-    block = block_match.group(1)
+    block = table_match.group(1)
     rows: list[KabutanForecastRow] = []
     header_cells: list[str] = []
     for row_html in re.findall(r"<tr[^>]*>(.*?)</tr>", block, flags=re.DOTALL):
@@ -92,7 +96,11 @@ def build_kabutan_forecast_snapshot(rows: list[KabutanForecastRow], base_year: i
 
 
 def _extract_kabutan_visible_body(html: str) -> str:
-    block_match = re.search(r'<div[^>]*class="[^"]*fin_year_result_d[^"]*"[^>]*>.*?</div>', html, flags=re.DOTALL)
+    block_match = re.search(
+        r'(<div[^>]*class="[^"]*fin_year_result_d[^"]*"[^>]*>[\s\S]*?<table[^>]*>[\s\S]*?</table>[\s\S]*?</div>)',
+        html,
+        flags=re.DOTALL,
+    )
     if block_match is None:
         return html
     return block_match.group(0)

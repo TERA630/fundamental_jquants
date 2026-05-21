@@ -56,6 +56,29 @@ def test_parse_kabutan_forecast_rows_extracts_dividend_when_header_is_one_share_
     assert rows[0].dividend == 22.0
 
 
+def test_parse_kabutan_forecast_rows_supports_nested_div_structure_in_fin_year_result_block():
+    html = """
+    <div id="wrapper_main"><div id="container"><div id="main"><div id="finance_box">
+      <div class="fin_year_t0_d">
+        <div class="fin_year_result_d">
+          <div class="inner-wrap">
+            <table>
+              <thead><tr><th>決算期</th><th>売上高</th><th>営業益</th><th>経常益</th><th>最終益</th><th>修正1株益</th><th>修正1株配</th></tr></thead>
+              <tbody>
+                <tr><th>2026.03予</th><td>3313018</td><td>170447</td><td>167671</td><td>114000</td><td>84.9</td><td>22</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div></div></div></div>
+    """
+    rows = _parse_kabutan_forecast_rows(html)
+    assert len(rows) == 1
+    assert rows[0].year == 2026
+    assert rows[0].dividend == 22.0
+
+
 def test_build_kabutan_forecast_snapshot_handles_post_earnings_layout_for_2026():
     rows = _parse_kabutan_forecast_rows(
         """

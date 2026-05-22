@@ -176,6 +176,17 @@
 - [x] A-3 株探はローカルHTML専用（直接Web取得を無効化）
 - [x] A-4 回帰テスト更新（HTML未設定時は `source=none`）
 
+## 優先度B/C 追補（2026-05-21）
+
+### 優先度B: 出力ビルダーのドメイン層集約
+- [x] `build_kabutan_forecast_output` を `app/presenters.py` から `app/domain/builders/kabutan_output.py` へ移設。
+- [x] Presenter はドメインビルダー呼び出しのみを担当する薄いアダプタに整理。
+
+### 優先度C: 互換Facade廃止
+- [x] `app/services.py`（domain互換Facade）を削除。
+- [x] `app/repositories.py`（data互換Facade）を削除。
+- [x] 参照箇所がないことを確認（`app.services` / `app.repositories` import は0件）。
+
 
 ## 変更優先度の判断（表示情報密度を上げる前に何をするべきか）
 結論として、**大きな表示仕様変更の前に、最小限のリファクター（特にPhase3の仕上げ）を先に行う方が安全**。

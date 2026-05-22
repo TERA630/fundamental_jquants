@@ -216,3 +216,23 @@
 - `app/gui_state.py` による表示状態分離: 達成
 - `app/gui_view_model.py` による表示メッセージ生成の分離: 達成
 - 判定: **Phase3は完了**
+
+## 進捗チェックポイント（2026-05-22）
+
+### 現在地
+- Phase1〜Phase3は完了済み。
+- 優先度A/B/C（Controller依存の実体化・watchlist責務移管・Facade廃止）も完了済み。
+- よって、**責務分離リファクタリングの当初計画は実質完了**。
+
+### 残タスク（リファクタ継続する場合）
+- Phase4（依存逆転とテスト戦略）の実施。
+  - UseCaseが抽象Repository境界を受け取る形へ移行（DI明確化）。
+  - Domain層のテストを拡張し、回帰観点を強化。
+
+### 次に着手しやすい機能変更（責務分離方針に沿う）
+1. 表示密度切替（標準/高密度）をGUIに追加
+   - `build_output_compact` / `build_output_detailed` の2系統をDomain Builderで提供。
+2. KabutanローカルHTML取り込み失敗時のGUI通知強化
+   - ViewModelでユーザー向けメッセージを段階化（未設定/読込失敗/解析失敗）。
+3. 指標表示の拡張
+   - `calc_*` はDomain Modelで完結、GUIは表示のみ担当。

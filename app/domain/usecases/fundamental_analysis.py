@@ -9,7 +9,6 @@ import re
 
 from app.data.file_cache import FileCache
 from app.data.jquants_client import JQuantsClient
-from app.data.kabutan_repository import KabutanForecastRepository
 from app.data.market_data_provider import fetch_yfinance_snapshot
 from app.data.utils import normalize_code
 from app.domain.models.kabutan_forecast import KabutanForecastPair
@@ -30,6 +29,10 @@ class MarketDataProviderPort(Protocol):
 
 
 class KabutanForecastRepositoryPort(Protocol):
+    def fetch_kabutan_forecast_pair(
+        self, code: str, target_years: tuple[int, int] | None = None
+    ) -> KabutanForecastPair: ...
+
     def fetch_kabutan_forecast_pair_from_file(
         self, html_path: str | Path, target_years: tuple[int, int] | None = None
     ) -> KabutanForecastPair: ...
@@ -51,12 +54,12 @@ class FundamentalAnalysisService:
         file_cache: FileCache | None = None,
         client: JQuantsClientPort | None = None,
         fetch_market_snapshot: MarketDataProviderPort | None = None,
-        kabutan_usecase: FetchKabutanForecastUseCase | None = None,
+        fetch_kabutan_forecast_usecase: FetchKabutanForecastUseCase | None = None,
     ):
         self.client = client or JQuantsClient(api_key)
         self.cache = file_cache or FileCache()
         self.fetch_market_snapshot = fetch_market_snapshot or fetch_yfinance_snapshot
-        self.kabutan_usecase = kabutan_usecase or FetchKabutanForecastUseCase(repository=KabutanForecastRepository())
+        self.fetch_kabutan_forecast_usecase = fetch_kabutan_forecast_usecase
 
     def build_cache_key_master(self, code4: str) -> str:
         return f"master_{normalize_code(code4)}"
@@ -126,8 +129,13 @@ class FundamentalAnalysisService:
             kabutan_source_message=kabutan_fetch_result.message,
         )
 
-    def fetch_kabutan_forecast_pair(self, code4: str, html_dir: Path | None = None) -> KabutanFetchResult:
-        repository: KabutanForecastRepositoryPort = self.kabutan_usecase.repository
+    def fetch_kabutan_forecast_pair(
+        self,
+        code4: str,
+        html_dir: Path | None = None,
+        allow_kabutan_web_fallback: bool = False,
+    ) -> KabutanFetchResult:
+        repository = self._get_kabutan_repository()
         if html_dir is None:
             if allow_kabutan_web_fallback:
                 return self._fetch_kabutan_forecast_pair_from_web(repository, code4)
@@ -146,6 +154,15 @@ class FundamentalAnalysisService:
         if html_candidates:
             return KabutanFetchResult(pair=None, source="none", message="HTML解析に失敗")
         return KabutanFetchResult(pair=None, source="none", message="HTMLファイル未検出")
+
+    def _get_kabutan_repository(self) -> KabutanForecastRepositoryPort:
+        if self.fetch_kabutan_forecast_usecase is None:
+            from app.data.kabutan_repository import KabutanForecastRepository
+
+            self.fetch_kabutan_forecast_usecase = FetchKabutanForecastUseCase(
+                repository=KabutanForecastRepository()
+            )
+        return self.fetch_kabutan_forecast_usecase.repository
 
     @staticmethod
     def _fetch_kabutan_forecast_pair_from_web(repository: KabutanForecastRepositoryPort, code4: str) -> KabutanFetchResult:

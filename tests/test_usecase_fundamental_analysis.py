@@ -149,7 +149,7 @@ class TestFundamentalAnalysisService(unittest.TestCase):
             file_cache=InMemoryCache(),
             client=FakeClient(),
             fetch_market_snapshot=FakeMarketProvider(),
-            kabutan_usecase=FakeKabutanUseCase(),
+            fetch_kabutan_forecast_usecase=FakeKabutanUseCase(),
         )
 
         result = service.fetch_kabutan_forecast_pair("8058", html_dir=None)

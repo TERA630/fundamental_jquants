@@ -83,7 +83,7 @@ def _build_pair() -> KabutanForecastPair:
 def test_fetch_kabutan_forecast_pair_prefers_html_dir(tmp_path: Path):
     pair = _build_pair()
     repo = StubRepository(result=pair)
-    service = FundamentalAnalysisService(api_key="dummy", kabutan_usecase=StubUseCase(repository=repo))
+    service = FundamentalAnalysisService(api_key="dummy", fetch_kabutan_forecast_usecase=StubUseCase(repository=repo))
 
     html_dir = tmp_path / "kabutan"
     html_dir.mkdir()
@@ -100,7 +100,7 @@ def test_fetch_kabutan_forecast_pair_prefers_html_dir(tmp_path: Path):
 def test_fetch_kabutan_forecast_pair_returns_none_source_when_web_opt_out_and_html_missing(tmp_path: Path):
     pair = _build_pair()
     repo = StubRepository(result=pair)
-    service = FundamentalAnalysisService(api_key="dummy", kabutan_usecase=StubUseCase(repository=repo))
+    service = FundamentalAnalysisService(api_key="dummy", fetch_kabutan_forecast_usecase=StubUseCase(repository=repo))
     html_dir = tmp_path / "kabutan"
     html_dir.mkdir()
 
@@ -114,7 +114,7 @@ def test_fetch_kabutan_forecast_pair_returns_none_source_when_web_opt_out_and_ht
 def test_fetch_kabutan_forecast_pair_supports_partial_filename_match(tmp_path: Path):
     pair = _build_pair()
     repo = StubRepository(result=pair)
-    service = FundamentalAnalysisService(api_key="dummy", kabutan_usecase=StubUseCase(repository=repo))
+    service = FundamentalAnalysisService(api_key="dummy", fetch_kabutan_forecast_usecase=StubUseCase(repository=repo))
 
     html_dir = tmp_path / "kabutan"
     html_dir.mkdir()
@@ -131,7 +131,7 @@ def test_fetch_kabutan_forecast_pair_supports_partial_filename_match(tmp_path: P
 def test_fetch_kabutan_forecast_pair_try_htm_after_html_parse_failure(tmp_path: Path):
     pair = _build_pair()
     repo = StubRepository(result=pair, fail_suffixes=(".html",))
-    service = FundamentalAnalysisService(api_key="dummy", kabutan_usecase=StubUseCase(repository=repo))
+    service = FundamentalAnalysisService(api_key="dummy", fetch_kabutan_forecast_usecase=StubUseCase(repository=repo))
 
     html_dir = tmp_path / "kabutan"
     html_dir.mkdir()

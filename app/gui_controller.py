@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Callable
 
 from app.data.file_cache import FileCache
 from app.data.watchlist_repository import fetch_watchlist_entries
@@ -13,8 +14,15 @@ from app.presenters import build_fundamental_output
 class FundamentalGuiController:
     """GUI層コントローラー: 表示以外のオーケストレーションを担当。"""
 
-    def __init__(self, file_cache: FileCache | None = None):
+    def __init__(
+        self,
+        file_cache: FileCache | None = None,
+        build_fundamental_service: Callable[[str, FileCache], FundamentalAnalysisService] | None = None,
+    ):
         self.file_cache = file_cache or FileCache()
+        self.build_fundamental_service = build_fundamental_service or (
+            lambda api_key, cache: FundamentalAnalysisService(api_key=api_key, file_cache=cache)
+        )
 
     def fetch_watchlist_entries(self, path: Path) -> list[tuple[str, str]]:
         return fetch_watchlist_entries(path)
@@ -37,7 +45,7 @@ class FundamentalGuiController:
         if cached_output is not None:
             return cached_output
 
-        service = FundamentalAnalysisService(api_key=api_key, file_cache=self.file_cache)
+        service = self.build_fundamental_service(api_key, self.file_cache)
         output = service.build_analysis_output(
             name,
             code4,

@@ -41,6 +41,7 @@ def _install_stub_modules() -> None:
 _install_stub_modules()
 
 from app.domain.usecases.fundamental_analysis import FundamentalAnalysisService
+from app.domain.models.kabutan_forecast import KabutanForecastPair, KabutanForecastRow
 
 
 class InMemoryCache:
